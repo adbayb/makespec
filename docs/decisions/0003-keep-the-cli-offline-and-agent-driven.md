@@ -17,7 +17,7 @@ Expose a non-interactive CLI with init, new, list, status, and check. Let agents
 
 Keep model-provider calls, editor launching, and terminal UI behavior outside the binary. Bare invocation prints help without reading stdin. New requires piped UTF-8 input and fails when stdin is a terminal.
 
-Agents use accepted RFCs and ADRs to inform plans. Reading or accepting a record does not authorize implementation, and creating a proposal does not authorize acceptance.
+Agents use accepted specifications and decisions to inform plans. Reading or accepting a record does not authorize implementation, and creating a proposal does not authorize acceptance.
 
 ## Consequences
 

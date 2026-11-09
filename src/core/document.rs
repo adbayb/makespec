@@ -11,29 +11,29 @@ pub(crate) const MAX_DOCUMENT_BYTES: u64 = 2 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Kind {
-    Adr,
-    Rfc,
+    Decision,
+    Specification,
 }
 
 impl Kind {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Adr => "adr",
-            Self::Rfc => "rfc",
+            Self::Decision => "decision",
+            Self::Specification => "specification",
         }
     }
 
     pub fn id_prefix(self) -> &'static str {
         match self {
-            Self::Adr => "ADR",
-            Self::Rfc => "RFC",
+            Self::Decision => "ADR",
+            Self::Specification => "RFC",
         }
     }
 
     pub fn directory(self) -> &'static str {
         match self {
-            Self::Adr => "decisions",
-            Self::Rfc => "specifications",
+            Self::Decision => "decisions",
+            Self::Specification => "specifications",
         }
     }
 }
@@ -43,10 +43,10 @@ impl std::str::FromStr for Kind {
 
     fn from_str(value: &str) -> Result<Self> {
         match value.to_ascii_lowercase().as_str() {
-            "adr" => Ok(Self::Adr),
-            "rfc" => Ok(Self::Rfc),
+            "decision" => Ok(Self::Decision),
+            "specification" => Ok(Self::Specification),
             _ => Err(MakespecError::Invalid(format!(
-                "unknown document kind `{value}`; expected `adr` or `rfc`"
+                "unknown document kind `{value}`; expected `decision` or `specification`"
             ))),
         }
     }
@@ -191,8 +191,8 @@ impl Metadata {
     pub fn validate(&self) -> Result<(Kind, u32)> {
         let (prefix, number) = parse_id(&self.id)?;
         let kind = match prefix {
-            "ADR" => Kind::Adr,
-            "RFC" => Kind::Rfc,
+            "ADR" => Kind::Decision,
+            "RFC" => Kind::Specification,
             _ => unreachable!("parse_id validates document prefixes"),
         };
 
@@ -472,8 +472,8 @@ pub fn validate_document(document: &Document) -> Vec<String> {
     }
 
     let sections: &[&str] = match kind {
-        Kind::Adr => &["Context", "Decision", "Consequences", "References"],
-        Kind::Rfc => &[
+        Kind::Decision => &["Context", "Decision", "Consequences", "References"],
+        Kind::Specification => &[
             "Context",
             "Requirements and constraints",
             "Options",
@@ -484,7 +484,7 @@ pub fn validate_document(document: &Document) -> Vec<String> {
         ],
     };
     let required = match kind {
-        Kind::Rfc if complete => &sections[..5],
+        Kind::Specification if complete => &sections[..5],
         _ => &sections[..3],
     };
     let level_two: Vec<&str> = headings
@@ -520,8 +520,12 @@ pub fn validate_document(document: &Document) -> Vec<String> {
         errors.push("sections are not in template order".into());
     }
 
-    if kind == Kind::Rfc {
-        errors.extend(validate_rfc_tables(&document.body, &headings, complete));
+    if kind == Kind::Specification {
+        errors.extend(validate_specification_tables(
+            &document.body,
+            &headings,
+            complete,
+        ));
     }
 
     if complete {
@@ -584,7 +588,11 @@ enum Criterion {
     Constraint,
 }
 
-fn validate_rfc_tables(markdown: &str, headings: &[Heading], complete: bool) -> Vec<String> {
+fn validate_specification_tables(
+    markdown: &str,
+    headings: &[Heading],
+    complete: bool,
+) -> Vec<String> {
     let criteria_text = section_text(markdown, headings, "Requirements and constraints");
     let criteria_headings = collect_headings(criteria_text);
     let mut errors = Vec::new();
@@ -635,7 +643,7 @@ fn validate_rfc_tables(markdown: &str, headings: &[Heading], complete: bool) -> 
     }
 
     if !criteria.keys().any(|id| id.starts_with("FR-")) {
-        errors.push("RFC comparison requires at least one functional requirement".into());
+        errors.push("specification comparison requires at least one functional requirement".into());
     }
 
     let options_text = section_text(markdown, headings, "Options");
@@ -1039,7 +1047,7 @@ mod tests {
     }
 
     #[test]
-    fn adr_requires_nygard_sections_except_body_status() {
+    fn decision_requires_nygard_sections_except_body_status() {
         let doc = Document {
             metadata: Metadata {
                 id: "ADR-0001".into(),
@@ -1072,7 +1080,7 @@ mod tests {
     fn rendered_heading_preserves_markdown_special_characters_in_title() {
         let title = "Choose [links](safely) and `code`";
         let document = NewDocument {
-            kind: Kind::Adr,
+            kind: Kind::Decision,
             title: title.into(),
             slug: slugify(title).unwrap(),
             date: "2026-11-09".into(),
@@ -1088,7 +1096,7 @@ mod tests {
     #[test]
     fn document_size_limit_includes_metadata_and_expanding_identifiers() {
         let mut document = NewDocument {
-            kind: Kind::Adr,
+            kind: Kind::Decision,
             title: "Bounded record".into(),
             slug: "bounded-record".into(),
             date: "2026-11-09".into(),

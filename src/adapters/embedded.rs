@@ -4,16 +4,16 @@ pub const SKILL_FILES: &[(&str, &str)] = &[
         include_str!("../../.agents/skills/makespec/SKILL.md"),
     ),
     (
-        "references/adr-template.md",
-        include_str!("../../.agents/skills/makespec/references/adr-template.md"),
+        "references/decision-template.md",
+        include_str!("../../.agents/skills/makespec/references/decision-template.md"),
     ),
     (
         "references/cli.md",
         include_str!("../../.agents/skills/makespec/references/cli.md"),
     ),
     (
-        "references/rfc-template.md",
-        include_str!("../../.agents/skills/makespec/references/rfc-template.md"),
+        "references/specification-template.md",
+        include_str!("../../.agents/skills/makespec/references/specification-template.md"),
     ),
     (
         "references/writing.md",

@@ -27,8 +27,8 @@ pub(crate) struct FilesystemStore {
 
 #[derive(Default)]
 struct Counters {
-    adr: u32,
-    rfc: u32,
+    decision: u32,
+    specification: u32,
 }
 
 impl FilesystemStore {
@@ -136,7 +136,7 @@ impl FilesystemStore {
 
         let mut paths = Vec::new();
 
-        for kind in [Kind::Adr, Kind::Rfc] {
+        for kind in [Kind::Decision, Kind::Specification] {
             let directory = self.root.join("docs").join(kind.directory());
 
             match fs::symlink_metadata(&directory) {
@@ -277,8 +277,8 @@ impl FilesystemStore {
             }
 
             match kind {
-                "adr" => counters.adr = value,
-                "rfc" => counters.rfc = value,
+                "adr" => counters.decision = value,
+                "rfc" => counters.specification = value,
                 _ => {
                     return Err(MakespecError::Invalid(
                         "unknown entry in Makespec ID counter state".into(),
@@ -297,7 +297,10 @@ impl FilesystemStore {
     }
 
     fn write_counters(&self, state_path: &Path, counters: &Counters) -> Result<()> {
-        let content = format!("adr={}\nrfc={}\n", counters.adr, counters.rfc);
+        let content = format!(
+            "adr={}\nrfc={}\n",
+            counters.decision, counters.specification
+        );
         let temp = stage_file(state_path, &content)?;
 
         temp.persist(state_path)
@@ -312,9 +315,9 @@ impl FilesystemStore {
         for document in documents {
             let (prefix, number) = parse_id(&document.metadata.id)?;
             let counter = if prefix == "ADR" {
-                &mut counters.adr
+                &mut counters.decision
             } else {
-                &mut counters.rfc
+                &mut counters.specification
             };
 
             *counter = (*counter).max(number);
@@ -467,10 +470,10 @@ impl ProjectStore for FilesystemStore {
                 })
                 .max()
                 .unwrap_or(0);
-            let current = if new_document.kind == Kind::Adr {
-                &mut counters.adr
+            let current = if new_document.kind == Kind::Decision {
+                &mut counters.decision
             } else {
-                &mut counters.rfc
+                &mut counters.specification
             };
 
             *current = (*current).max(max_number);
@@ -666,7 +669,7 @@ mod tests {
     use super::*;
     use crate::{adapters::embedded, core::service};
 
-    const ADR_BODY: &str = "## Context\n\nA focused decision is needed.\n\n## Decision\n\nUse the proposed approach.\n\n## Consequences\n\nThe choice is documented.";
+    const DECISION_BODY: &str = "## Context\n\nA focused decision is needed.\n\n## Decision\n\nUse the proposed approach.\n\n## Consequences\n\nThe choice is documented.";
 
     fn initialized_store() -> (tempfile::TempDir, FilesystemStore) {
         let directory = tempfile::tempdir().unwrap();
@@ -696,9 +699,9 @@ mod tests {
                 std::thread::spawn(move || {
                     service::create(
                         store.as_ref(),
-                        Kind::Adr,
+                        Kind::Decision,
                         format!("Concurrent decision {index}"),
-                        ADR_BODY.to_string(),
+                        DECISION_BODY.to_string(),
                         "2026-11-09",
                     )
                     .unwrap()
@@ -718,6 +721,34 @@ mod tests {
     }
 
     #[test]
+    fn creation_preserves_existing_counters_for_both_document_kinds() {
+        let (_directory, store) = initialized_store();
+        let (_, state_path) = store.lock_paths().unwrap();
+
+        fs::write(&state_path, "adr=9\nrfc=12\n").unwrap();
+
+        for (kind, body, expected) in [
+            (Kind::Decision, DECISION_BODY, "ADR-0010"),
+            (
+                Kind::Specification,
+                include_str!("../../.agents/skills/makespec/references/specification-template.md"),
+                "RFC-0013",
+            ),
+        ] {
+            let created = service::create(
+                &store,
+                kind,
+                format!("New {kind}"),
+                body.into(),
+                "2026-11-09",
+            )
+            .unwrap();
+
+            assert_eq!(created.metadata.id, expected);
+        }
+    }
+
+    #[test]
     fn creation_conflicts_preserve_existing_files_and_reserved_ids() {
         let (directory, store) = initialized_store();
         let destination = directory.path().join("docs/decisions/0002-collision.md");
@@ -734,9 +765,9 @@ mod tests {
         assert!(matches!(
             service::create(
                 &store,
-                Kind::Adr,
+                Kind::Decision,
                 "Collision".into(),
-                ADR_BODY.into(),
+                DECISION_BODY.into(),
                 "2026-11-09"
             ),
             Err(MakespecError::AlreadyExists(_))
@@ -751,9 +782,9 @@ mod tests {
 
         let created = service::create(
             &store,
-            Kind::Adr,
+            Kind::Decision,
             "After collision".into(),
-            ADR_BODY.into(),
+            DECISION_BODY.into(),
             "2026-11-09",
         )
         .unwrap();
@@ -766,9 +797,9 @@ mod tests {
         let (_directory, store) = initialized_store();
         let replacement = service::create(
             &store,
-            Kind::Adr,
+            Kind::Decision,
             "A replacement decision".into(),
-            ADR_BODY.into(),
+            DECISION_BODY.into(),
             "2026-11-09",
         )
         .unwrap();

@@ -44,7 +44,7 @@ Install [Hyperfine 2 or later](https://github.com/sharkdp/hyperfine#installation
 cargo bench --bench catalog -- 500
 ```
 
-Cargo builds the optimized CLI and a Rust catalog generator. Hyperfine measures wall time and peak resident set size (RSS) for `list` and `check`, using three warmup runs followed by repeated measurements. The catalog defaults to 500 synthetic ADRs plus the two seed records.
+Cargo builds the optimized CLI and a Rust catalog generator. Hyperfine measures wall time and peak resident set size (RSS) for `list` and `check`, using three warmup runs followed by repeated measurements. The catalog defaults to 500 synthetic decisions plus the two seed records.
 
 Provisional macOS ARM64 budgets for this catalog are 100 ms per command and 32 MiB peak resident set size. Recalibrate them on release hardware. Linux measurements can include Hyperfine's inherited memory floor for small processes; see its [metric definitions](https://github.com/sharkdp/hyperfine#choosing-metrics-and-units).
 

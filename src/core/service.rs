@@ -10,8 +10,8 @@ use super::{
     error::{MakespecError, Result},
 };
 
-const SEED_ADR_TITLE: &str = "Use ADRs for decisions and RFCs for changes";
-const SEED_RFC_TITLE: &str = "Specify the RFC format";
+const SEED_DECISION_TITLE: &str = "Use decisions and specifications";
+const SEED_SPECIFICATION_TITLE: &str = "Define the specification format";
 
 #[derive(Clone, Debug)]
 pub(crate) struct ProjectFile {
@@ -70,10 +70,20 @@ pub(crate) fn initialize(
     NaiveDate::parse_from_str(date, "%Y-%m-%d")
         .map_err(|_| MakespecError::Invalid(format!("invalid initialization date `{date}`")))?;
 
-    let adr = seed_document(Kind::Adr, SEED_ADR_TITLE, date, adr_seed_body())?;
-    let rfc = seed_document(Kind::Rfc, SEED_RFC_TITLE, date, rfc_seed_body())?;
+    let decision = seed_document(
+        Kind::Decision,
+        SEED_DECISION_TITLE,
+        date,
+        decision_seed_body(),
+    )?;
+    let specification = seed_document(
+        Kind::Specification,
+        SEED_SPECIFICATION_TITLE,
+        date,
+        specification_seed_body(),
+    )?;
 
-    for seed in [&adr, &rfc] {
+    for seed in [&decision, &specification] {
         let errors = validate_document(seed);
 
         if !errors.is_empty() {
@@ -86,14 +96,14 @@ pub(crate) fn initialize(
 
     let mut files = vec![
         ProjectFile {
-            relative_path: adr.path.clone(),
-            content: adr.raw.clone(),
-            seed: Some(seed_identity(&adr)),
+            relative_path: decision.path.clone(),
+            content: decision.raw.clone(),
+            seed: Some(seed_identity(&decision)),
         },
         ProjectFile {
-            relative_path: rfc.path.clone(),
-            content: rfc.raw.clone(),
-            seed: Some(seed_identity(&rfc)),
+            relative_path: specification.path.clone(),
+            content: specification.raw.clone(),
+            seed: Some(seed_identity(&specification)),
         },
     ];
 
@@ -107,7 +117,7 @@ pub(crate) fn initialize(
 
     let existing = store.existing_documents()?;
 
-    for seed in [&adr, &rfc] {
+    for seed in [&decision, &specification] {
         if let Some(document) = existing
             .iter()
             .find(|document| document.metadata.id == seed.metadata.id)
@@ -363,14 +373,14 @@ fn structure_error(context: &str, errors: &[String]) -> MakespecError {
     MakespecError::Invalid(format!("{context}: {}", errors.join("; ")))
 }
 
-fn adr_seed_body() -> &'static str {
-    "## Context\n\nProject changes need two levels of design records: focused decisions and broader functionality proposals. A single format makes small choices hard to find and forces feature proposals into an unsuitable structure.\n\n## Decision\n\nUse ADRs for small, focused decisions and RFCs to specify functionality or other substantial changes. Keep both as Markdown files in `docs/decisions` and `docs/specifications`, respectively. Give each kind its own incrementing ID, creation date, and front-matter status. Use an RFC when a change needs requirements, constraints, alternatives, and an adoption plan; record a contained choice as an ADR.\n\n## Consequences\n\nReviewers can trace proposals and decisions in Git. Authors must keep status and structure valid, and RFC authors must compare every option against the same criteria. The repository gains a small amount of documentation overhead, but does not need a service or database."
+fn decision_seed_body() -> &'static str {
+    "## Context\n\nProject changes need two levels of design records: focused decisions and broader functionality specifications. A single format makes small choices hard to find and forces feature specifications into an unsuitable structure.\n\n## Decision\n\nUse decisions for small, focused choices and specifications for functionality or other substantial changes. Decisions follow the architecture decision record (ADR) format; specifications follow the request for comments (RFC) format and include product requirements documents (PRDs). Keep both as Markdown files in `docs/decisions` and `docs/specifications`, respectively. Give each kind its own incrementing ID, creation date, and front-matter status. Use a specification when a change needs requirements, constraints, alternatives, and an adoption plan; record a contained choice as a decision.\n\n## Consequences\n\nReviewers can trace specifications and decisions in Git. Authors must keep status and structure valid, and specification authors must compare every option against the same criteria. The repository gains a small amount of documentation overhead, but does not need a service or database."
 }
 
-fn rfc_seed_body() -> &'static str {
+fn specification_seed_body() -> &'static str {
     r#"## Context
 
-Define a consistent RFC format for functionality proposals. Use this format for product requirements documents (PRDs) as well as technical change proposals. Authors need a reviewable record of the problem, evaluation criteria, options, chosen design, and adoption approach without a hosted service.
+Define a consistent specification format for functionality. Specifications use the request for comments (RFC) format and include product requirements documents (PRDs) as well as technical change proposals. Authors need a reviewable record of the problem, evaluation criteria, options, chosen design, and adoption approach without a hosted service.
 
 ## Requirements and constraints
 
@@ -378,8 +388,8 @@ Define a consistent RFC format for functionality proposals. Use this format for 
 
 | ID | Priority | Requirement |
 | --- | --- | --- |
-| FR-001 | MUST | An RFC specifies functionality requirements, constraints, and qualitative alternatives. |
-| NFR-001 | SHOULD | An RFC remains readable and reviewable as plain Markdown in Git. |
+| FR-001 | MUST | A specification describes functionality requirements, constraints, and qualitative alternatives. |
+| NFR-001 | SHOULD | A specification remains readable and reviewable as plain Markdown in Git. |
 
 ### Constraints
 
@@ -391,13 +401,13 @@ Define a consistent RFC format for functionality proposals. Use this format for 
 
 - No change: leave proposal formats to individual authors.
 - Free-form Markdown: record proposals without required sections or comparison rules.
-- ADR-only records: reuse the focused decision format for functionality proposals.
+- Decision-only records: reuse the focused decision format for functionality specifications.
 - Makespec format: use shared criteria, an options comparison, and a design for the chosen option.
 
-| Criterion ID | No change | Free-form Markdown | ADR-only records | Makespec format |
+| Criterion ID | No change | Free-form Markdown | Decision-only records | Makespec format |
 | --- | --- | --- | --- | --- |
-| FR-001 | Does not meet - Proposals need not capture the required areas. | Does not meet - No structure requires all required areas. | Does not meet - ADRs do not specify functionality proposals. | Fully meets - The format requires functionality criteria, constraints, and comparisons. |
-| NFR-001 | Partially meets - Markdown stays readable, but authors lack a shared structure. | Fully meets - Free-form Markdown remains easy to read and diff. | Fully meets - ADRs remain plain Markdown in Git. | Fully meets - The format uses reviewable Markdown tables. |
+| FR-001 | Does not meet - Proposals need not capture the required areas. | Does not meet - No structure requires all required areas. | Does not meet - Decisions do not specify functionality. | Fully meets - The format requires functionality criteria, constraints, and comparisons. |
+| NFR-001 | Partially meets - Markdown stays readable, but authors lack a shared structure. | Fully meets - Free-form Markdown remains easy to read and diff. | Fully meets - Decisions remain plain Markdown in Git. | Fully meets - The format uses reviewable Markdown tables. |
 | C-001 | PASS - It requires no service or database. | PASS - It uses repository files only. | PASS - It uses repository files only. | PASS - The CLI reads and writes local Markdown files. |
 
 **Chosen option:** Makespec format
@@ -406,15 +416,15 @@ The chosen format fully meets FR-001 and satisfies the hard constraint. It keeps
 
 ## Design
 
-Every RFC has YAML front matter containing `id`, `title`, `date`, and `status`. The CLI supplies this metadata and the title heading. The ID prefix determines the document kind, and the filename retains its creation-time slug if the title later changes.
+Every specification has YAML front matter containing `id`, `title`, `date`, and `status`. The CLI supplies this metadata and the title heading. The ID prefix determines the document kind: `ADR-` for decisions and `RFC-` for specifications. The filename retains its creation-time slug if the title later changes.
 
-RFC bodies use Context, Requirements and constraints, Options, Design, and Adoption in that order. Context starts with a short proposal summary and explains the problem and scope. Put functional requirements in a `### Requirements` table, adding non-functional requirements only when relevant. Add a separate `### Constraints` table only for genuine hard boundaries. An optional Open questions section may follow Adoption.
+Specification bodies use Context, Requirements and constraints, Options, Design, and Adoption in that order. Context starts with a short proposal summary and explains the problem and scope. Put functional requirements in a `### Requirements` table, adding non-functional requirements only when relevant. Add a separate `### Constraints` table only for genuine hard boundaries. An optional Open questions section may follow Adoption.
 
-An optional References section comes last. Link related ADRs and RFCs by ID using relative Markdown paths, explain each relationship, and include external sources when relevant. An RFC may link to broader or focused RFCs instead of duplicating requirements.
+An optional References section comes last. Link related decisions and specifications by ID using relative Markdown paths, explain each relationship, and include external sources when relevant. A specification may link to broader or focused specifications instead of duplicating requirements.
 
 Functional requirements use unique `FR-001`-style IDs, and non-functional requirements use `NFR-001`-style IDs. Both use priority (MUST, SHOULD, or MAY). Constraints use unique `C-001` IDs. Options includes candidate descriptions and one comparison table with criteria in rows and options in columns, including No change. Requirement cells use `Does not meet`, `Partially meets`, or `Fully meets`, followed by ` - ` and evidence. Constraint cells use `PASS` or `FAIL`, followed by ` - ` and evidence. The chosen option must fully meet each MUST requirement and pass every constraint. Explain the choice using criterion IDs rather than an aggregate score.
 
-New records start as drafts. Draft RFCs require Context, Requirements and constraints, and Options, including at least one functional requirement and a comparison table. Draft comparison cells and the chosen option may remain blank, and Design and Adoption may be omitted. Before promotion to proposed, complete the five sections, assess every criterion for every option, select an eligible option, and replace template placeholders. Proposed records may return to draft for rework or proceed to accepted or rejected. Drafts may also be rejected. Accepted records may become deprecated or superseded.
+New records start as drafts. Draft specifications require Context, Requirements and constraints, and Options, including at least one functional requirement and a comparison table. Draft comparison cells and the chosen option may remain blank, and Design and Adoption may be omitted. Before promotion to proposed, complete the five sections, assess every criterion for every option, select an eligible option, and replace template placeholders. Proposed records may return to draft for rework or proceed to accepted or rejected. Drafts may also be rejected. Accepted records may become deprecated or superseded.
 
 Design describes only the chosen option, including behavior, examples, and failure cases. Add a Risks and mitigations subsection when material risks need explanation. Adoption covers rollout, compatibility, and verification, with migration or rollback when relevant.
 
@@ -424,23 +434,26 @@ Comparison labels require supporting evidence; the CLI checks structure and elig
 
 ## Adoption
 
-Initialize a repository with the CLI, which creates the accepted format RFC and adoption ADR. Create drafts from the bundled template and run `makespec check` after edits. Complete a draft before promoting it to proposed, then request acceptance after review. Verify adoption by checking the seed records and exercising the draft-to-proposed-to-accepted workflow."#
+Initialize a repository with the CLI, which creates the accepted format specification and adoption decision. Create drafts from the bundled template and run `makespec check` after edits. Complete a draft before promoting it to proposed, then request acceptance after review. Verify adoption by checking the seed records and exercising the draft-to-proposed-to-accepted workflow."#
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const DRAFT_RFC_BODY: &str = "## Context\n\nLet users search local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Search records by title. |\n\n## Options\n\n| Criterion ID | No change | Local search |\n| --- | --- | --- |\n| FR-001 | | |\n\n**Chosen option:**";
+    const DRAFT_SPECIFICATION_BODY: &str = "## Context\n\nLet users search local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Search records by title. |\n\n## Options\n\n| Criterion ID | No change | Local search |\n| --- | --- | --- |\n| FR-001 | | |\n\n**Chosen option:**";
 
     #[test]
-    fn rfc_drafts_can_be_unfinished_and_need_only_functional_criteria() {
-        let draft = rfc(DRAFT_RFC_BODY, Status::Draft);
+    fn specification_drafts_can_be_unfinished_and_need_only_functional_criteria() {
+        let draft = specification(DRAFT_SPECIFICATION_BODY, Status::Draft);
 
         assert!(validate_document(&draft).is_empty());
-        assert!(validate_document(&rfc(DRAFT_RFC_BODY, Status::Rejected)).is_empty());
+        assert!(
+            validate_document(&specification(DRAFT_SPECIFICATION_BODY, Status::Rejected))
+                .is_empty()
+        );
 
-        let errors = validate_document(&rfc(DRAFT_RFC_BODY, Status::Proposed));
+        let errors = validate_document(&specification(DRAFT_SPECIFICATION_BODY, Status::Proposed));
 
         for expected in [
             "`## Design`",
@@ -454,20 +467,20 @@ mod tests {
             );
         }
 
-        let body = DRAFT_RFC_BODY
+        let body = DRAFT_SPECIFICATION_BODY
             .replace(
                 "| FR-001 | | |",
                 "| FR-001 | Does not meet - No search exists. | Fully meets - Search matches titles. |",
             )
             .replace("**Chosen option:**", "**Chosen option:** Local search")
             + "\n\n## Design\n\nMatch a query against record titles.\n\n## Adoption\n\nShip the search command and verify title matches.";
-        let errors = validate_document(&rfc(&body, Status::Proposed));
+        let errors = validate_document(&specification(&body, Status::Proposed));
 
         assert!(errors.is_empty(), "{errors:?}");
     }
 
     #[test]
-    fn rfc_drafts_still_reject_inconsistent_comparison_structure() {
+    fn specification_drafts_still_reject_inconsistent_comparison_structure() {
         for (original, replacement, expected) in [
             ("No change", "Do nothing", "include a `No change`"),
             (
@@ -502,8 +515,8 @@ mod tests {
                 "template order",
             ),
         ] {
-            let body = DRAFT_RFC_BODY.replace(original, replacement);
-            let errors = validate_document(&rfc(&body, Status::Draft));
+            let body = DRAFT_SPECIFICATION_BODY.replace(original, replacement);
+            let errors = validate_document(&specification(&body, Status::Draft));
 
             assert!(
                 errors.iter().any(|error| error.contains(expected)),
@@ -516,12 +529,12 @@ mod tests {
     fn template_drafts_are_valid_but_require_completion_before_review() {
         for (kind, body) in [
             (
-                Kind::Adr,
-                include_str!("../../.agents/skills/makespec/references/adr-template.md"),
+                Kind::Decision,
+                include_str!("../../.agents/skills/makespec/references/decision-template.md"),
             ),
             (
-                Kind::Rfc,
-                include_str!("../../.agents/skills/makespec/references/rfc-template.md"),
+                Kind::Specification,
+                include_str!("../../.agents/skills/makespec/references/specification-template.md"),
             ),
         ] {
             let new_document = NewDocument {
@@ -544,15 +557,15 @@ mod tests {
 
     #[test]
     fn references_are_optional_unique_nonempty_and_in_template_order() {
-        let references = "## References\n\n- [RFC-0001: Specify the RFC format](../specifications/0001-specify-the-rfc-format.md) defines the format.";
+        let references = "## References\n\n- [RFC-0001: Define the specification format](../specifications/0001-define-the-specification-format.md) defines the format.";
 
         for (kind, body) in [
-            (Kind::Adr, adr_seed_body().to_string()),
+            (Kind::Decision, decision_seed_body().to_string()),
             (
-                Kind::Rfc,
+                Kind::Specification,
                 format!(
                     "{}\n\n## Open questions\n\nWhich follow-up metrics would help?",
-                    rfc_seed_body()
+                    specification_seed_body()
                 ),
             ),
         ] {
@@ -586,9 +599,9 @@ mod tests {
 
         let body = format!(
             "{}\n\n{references}\n\n## Open questions\n\nWhich follow-up metrics would help?",
-            rfc_seed_body()
+            specification_seed_body()
         );
-        let errors = validate_document(&rfc(&body, Status::Proposed));
+        let errors = validate_document(&specification(&body, Status::Proposed));
 
         assert!(
             errors.iter().any(|error| error.contains("template order")),
@@ -597,8 +610,11 @@ mod tests {
     }
 
     #[test]
-    fn rfc_comparisons_validate_descriptions_labels_and_chosen_option_eligibility() {
-        assert!(validate_document(&rfc(rfc_seed_body(), Status::Proposed)).is_empty());
+    fn specification_comparisons_validate_descriptions_labels_and_chosen_option_eligibility() {
+        assert!(
+            validate_document(&specification(specification_seed_body(), Status::Proposed))
+                .is_empty()
+        );
 
         for (original, replacement, expected, valid_draft) in [
             (
@@ -620,38 +636,38 @@ mod tests {
                 false,
             ),
             (
-                "| FR-001 | MUST | An RFC specifies functionality requirements, constraints, and qualitative alternatives. |",
+                "| FR-001 | MUST | A specification describes functionality requirements, constraints, and qualitative alternatives. |",
                 "| FR-001 | MUST | |",
                 "needs a description",
                 false,
             ),
         ] {
-            let body = rfc_seed_body().replace(original, replacement);
-            let errors = validate_document(&rfc(&body, Status::Proposed));
+            let body = specification_seed_body().replace(original, replacement);
+            let errors = validate_document(&specification(&body, Status::Proposed));
 
             assert!(
                 errors.iter().any(|error| error.contains(expected)),
                 "{errors:?}"
             );
             assert_eq!(
-                validate_document(&rfc(&body, Status::Draft)).is_empty(),
+                validate_document(&specification(&body, Status::Draft)).is_empty(),
                 valid_draft
             );
         }
     }
 
     #[test]
-    fn rfc_reports_requirement_and_constraint_errors_together() {
-        let body = rfc_seed_body()
+    fn specification_reports_requirement_and_constraint_errors_together() {
+        let body = specification_seed_body()
             .replace(
-                "| FR-001 | MUST | An RFC specifies functionality requirements, constraints, and qualitative alternatives. |",
+                "| FR-001 | MUST | A specification describes functionality requirements, constraints, and qualitative alternatives. |",
                 "| FR-001 | MUST | |",
             )
             .replace(
                 "PASS - The CLI reads and writes local Markdown files.",
                 "FAIL - The CLI reads and writes local Markdown files.",
             );
-        let errors = validate_document(&rfc(&body, Status::Proposed));
+        let errors = validate_document(&specification(&body, Status::Proposed));
 
         assert!(
             errors
@@ -665,9 +681,9 @@ mod tests {
         );
     }
 
-    fn rfc(body: &str, status: Status) -> Document {
+    fn specification(body: &str, status: Status) -> Document {
         NewDocument {
-            kind: Kind::Rfc,
+            kind: Kind::Specification,
             title: "Local search".into(),
             slug: "local-search".into(),
             date: "2026-11-09".into(),

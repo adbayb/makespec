@@ -13,9 +13,9 @@ Agents and developers need predictable locations for decisions and specification
 
 ## Decision
 
-Store ADRs in docs/decisions/ and RFCs in docs/specifications/. Use the full content-oriented directory names so readers do not need to know the ADR and RFC acronyms to navigate the repository.
+Store decisions in docs/decisions/ and specifications in docs/specifications/. Use the full content-oriented names in directories, CLI kinds, and documentation so readers do not need to know the ADR and RFC acronyms to use Makespec.
 
-Run commands from the project root and install the skill under .agents/skills/makespec/. Do not require a project configuration file or expose custom document-directory flags. Keep the adr/rfc command kinds and ADR-/RFC- ID prefixes.
+Run commands from the project root and install the skill under .agents/skills/makespec/. Do not require a project configuration file or expose custom document-directory flags. Use decision/specification as the only CLI kinds, without aliases. Keep ADR-/RFC- ID prefixes to identify the underlying formats.
 
 ## Consequences
 

@@ -6,7 +6,7 @@ use std::{
 
 use tempfile::{TempDir, tempdir};
 
-const ADR_BODY: &str = "## Context\n\nThe project needs a focused decision.\n\n## Decision\n\nUse the proposed approach.\n\n## Consequences\n\nThe decision remains in Git.";
+const DECISION_BODY: &str = "## Context\n\nThe project needs a focused decision.\n\n## Decision\n\nUse the proposed approach.\n\n## Consequences\n\nThe decision remains in Git.";
 
 #[test]
 fn cli_initializes_creates_lists_changes_status_and_checks() {
@@ -18,17 +18,38 @@ fn cli_initializes_creates_lists_changes_status_and_checks() {
             .join(".agents/skills/makespec/SKILL.md")
             .is_file()
     );
-    assert_eq!(
-        std::fs::read_to_string(
-            project
-                .path()
-                .join(".agents/skills/makespec/references/writing.md")
-        )
-        .unwrap(),
-        include_str!("../.agents/skills/makespec/references/writing.md")
-    );
+    for (name, expected) in [
+        (
+            "decision-template.md",
+            include_str!("../.agents/skills/makespec/references/decision-template.md"),
+        ),
+        (
+            "specification-template.md",
+            include_str!("../.agents/skills/makespec/references/specification-template.md"),
+        ),
+        (
+            "writing.md",
+            include_str!("../.agents/skills/makespec/references/writing.md"),
+        ),
+    ] {
+        assert_eq!(
+            std::fs::read_to_string(
+                project
+                    .path()
+                    .join(".agents/skills/makespec/references")
+                    .join(name)
+            )
+            .unwrap(),
+            expected
+        );
+    }
 
-    let created = create(project.path(), "adr", "Document a focused choice", ADR_BODY);
+    let created = create(
+        project.path(),
+        "decision",
+        "Document a focused choice",
+        DECISION_BODY,
+    );
 
     assert!(
         created.status.success(),
@@ -63,9 +84,29 @@ fn cli_initializes_creates_lists_changes_status_and_checks() {
 }
 
 #[test]
+fn creation_rejects_abbreviated_document_kinds() {
+    let project = initialized_project();
+
+    for kind in ["adr", "rfc"] {
+        let result = run(project.path(), &["new", kind, "A focused choice"]);
+
+        assert_eq!(result.status.code(), Some(2));
+        assert!(
+            String::from_utf8_lossy(&result.stderr)
+                .contains("expected `decision` or `specification`")
+        );
+    }
+}
+
+#[test]
 fn supersession_requires_a_positional_accepted_replacement() {
     let project = initialized_project();
-    let created = create(project.path(), "adr", "Use a replacement", ADR_BODY);
+    let created = create(
+        project.path(),
+        "decision",
+        "Use a replacement",
+        DECISION_BODY,
+    );
 
     assert!(created.status.success());
 
@@ -109,7 +150,7 @@ fn supersession_requires_a_positional_accepted_replacement() {
     let original = std::fs::read_to_string(
         project
             .path()
-            .join("docs/decisions/0001-use-adrs-for-decisions-and-rfcs-for-changes.md"),
+            .join("docs/decisions/0001-use-decisions-and-specifications.md"),
     )
     .unwrap();
 
@@ -123,7 +164,7 @@ fn invalid_document_body_is_rejected_without_writing_a_record() {
 
     let result = create(
         project.path(),
-        "adr",
+        "decision",
         "Incomplete decision",
         "## Context\n\nOnly one section.",
     );
@@ -141,7 +182,7 @@ fn invalid_document_body_is_rejected_without_writing_a_record() {
 
     let result = create(
         project.path(),
-        "adr",
+        "decision",
         "Body only",
         "---\nid: ADR-0001\n---\n\n## Context\n\nIssue.",
     );
@@ -151,11 +192,11 @@ fn invalid_document_body_is_rejected_without_writing_a_record() {
 }
 
 #[test]
-fn rfc_drafts_require_completion_before_review_and_acceptance() {
+fn specification_drafts_require_completion_before_review_and_acceptance() {
     let project = initialized_project();
 
     let body = "## Context\n\nSearch local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Find records by title. |\n\n## Options\n\n| Criterion ID | No change | Search |\n| --- | --- | --- |\n| FR-001 | | |\n\n**Chosen option:**";
-    let created = create(project.path(), "rfc", "Local search", body);
+    let created = create(project.path(), "specification", "Local search", body);
 
     assert!(
         created.status.success(),
@@ -198,7 +239,7 @@ fn rfc_drafts_require_completion_before_review_and_acceptance() {
         );
     }
 
-    let rejected_draft = create(project.path(), "rfc", "Another search", body);
+    let rejected_draft = create(project.path(), "specification", "Another search", body);
 
     assert!(rejected_draft.status.success());
 

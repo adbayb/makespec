@@ -12,4 +12,4 @@ Replace with the important benefits, costs, and follow-up work.
 
 ## References
 
-Link related ADRs and RFCs by ID using relative Markdown paths, and include external sources when relevant. Add a short note explaining each relationship. Remove this optional section when there are no references.
+Link related decisions and specifications by ID using relative Markdown paths, and include external sources when relevant. Add a short note explaining each relationship. Remove this optional section when there are no references.

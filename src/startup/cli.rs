@@ -17,7 +17,7 @@ use crate::{
     name = "makespec",
     version,
     disable_help_subcommand = true,
-    about = "Manage ADRs and RFCs in your repository"
+    about = "Manage decisions and specifications in your repository"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -28,6 +28,7 @@ struct Cli {
 enum CommandLine {
     Init,
     New {
+        #[arg(value_name = "decision|specification")]
         kind: Kind,
         title: String,
     },

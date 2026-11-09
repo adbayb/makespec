@@ -23,10 +23,10 @@ Parse metadata and Markdown structure rather than interpreting document contents
 
 Humans and agents can inspect the complete records without a running service or database. Git retains their review history.
 
-Authors can make invalid external edits, so check must report structural errors. Canonical RFC tables constrain Markdown authoring, and structural validation cannot establish whether an assessment is true.
+Authors can make invalid external edits, so check must report structural errors. Canonical specification tables constrain Markdown authoring, and structural validation cannot establish whether an assessment is true.
 
 ## References
 
 - [Document rules](../../src/core/document.rs) define metadata, parsing, and rendering.
-- [RFC-0001: Specify the RFC format](../specifications/0001-specify-the-rfc-format.md) defines canonical RFC structure and comparison labels.
-- [ADR-0001: Use ADRs for decisions and RFCs for changes](0001-use-adrs-for-decisions-and-rfcs-for-changes.md) adopts the two record types.
+- [RFC-0001: Define the specification format](../specifications/0001-define-the-specification-format.md) defines canonical specification structure and comparison labels.
+- [ADR-0001: Use decisions and specifications](0001-use-decisions-and-specifications.md) adopts the two record types.

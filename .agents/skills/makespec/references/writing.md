@@ -1,4 +1,4 @@
-# Writing ADRs and RFCs
+# Writing decisions and specifications
 
 Apply these rules to record content and planning prose. Preserve facts, technical meaning, required template syntax, IDs, comparison labels, and MUST/SHOULD/MAY priorities. Leave code, commands, paths, URLs, and quotations unchanged. Keep meaningful Unicode in names, localized text, and technical notation.
 

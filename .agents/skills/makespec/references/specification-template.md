@@ -1,6 +1,6 @@
 ## Context
 
-Replace with a short proposal summary, the current problem, and the intended outcome. Define scope and relevant non-goals, citing related ADRs or RFCs.
+Replace with a short proposal summary, the current problem, and the intended outcome. Define scope and relevant non-goals, citing related decisions or specifications.
 
 ## Requirements and constraints
 
@@ -25,7 +25,7 @@ Keep this subsection only for genuine hard boundaries, such as a required platfo
 
 Describe each candidate, including `No change` (keep the current behavior without the proposed feature or modification). Name options in the column headers and compare them against the same criteria. Include one row for each requirement and constraint ID; remove rows for criteria you omit above.
 
-Leave unassessed cells blank while the RFC is a draft. Before promoting it to proposed, fill each cell with `LABEL - explanation` and supporting evidence:
+Leave unassessed cells blank while the specification is a draft. Before promoting it to proposed, fill each cell with `LABEL - explanation` and supporting evidence:
 
 - Requirements: `Does not meet`, `Partially meets`, or `Fully meets`.
 - Constraints: `PASS` or `FAIL`.
@@ -58,4 +58,4 @@ List remaining questions and how to resolve them. Resolve questions that prevent
 
 ## References
 
-Link related ADRs and RFCs by ID using relative Markdown paths, and include external sources when relevant. Add a short note explaining each relationship. Remove this optional section when there are no references.
+Link related decisions and specifications by ID using relative Markdown paths, and include external sources when relevant. Add a short note explaining each relationship. Remove this optional section when there are no references.

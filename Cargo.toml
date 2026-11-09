@@ -3,7 +3,7 @@ name = "makespec"
 version = "0.0.0"
 edition = "2024"
 rust-version = "1.89"
-description = "A local-first CLI for architecture decisions and RFCs"
+description = "A local-first CLI for decisions and specifications"
 license = "MIT"
 
 [dependencies]
