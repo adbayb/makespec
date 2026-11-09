@@ -26,6 +26,32 @@ pub(crate) struct SeedIdentity {
     pub title: String,
 }
 
+impl SeedIdentity {
+    pub(crate) fn validate(&self, document: &Document, expected_path: &str) -> Result<()> {
+        if document.path != expected_path
+            || document.metadata.id != self.id
+            || document.metadata.title != self.title
+            || document.metadata.status != Status::Accepted
+        {
+            return Err(MakespecError::Invalid(format!(
+                "initialization conflict: existing {} does not match the accepted seed record",
+                document.path
+            )));
+        }
+
+        let errors = validate_document(document);
+
+        if !errors.is_empty() {
+            return Err(structure_error(
+                &format!("existing seed {} is invalid", self.id),
+                &errors,
+            ));
+        }
+
+        Ok(())
+    }
+}
+
 pub(crate) trait ProjectStore {
     fn initialize(&self, files: &[ProjectFile]) -> Result<()>;
     fn existing_documents(&self) -> Result<Vec<Document>>;
@@ -86,25 +112,7 @@ pub(crate) fn initialize(
             .iter()
             .find(|document| document.metadata.id == seed.metadata.id)
         {
-            if document.path != seed.path
-                || document.metadata.title != seed.metadata.title
-                || document.metadata.status != Status::Accepted
-            {
-                return Err(MakespecError::Invalid(format!(
-                    "initialization conflict: existing {} does not match the accepted seed record",
-                    document.path
-                )));
-            }
-
-            let errors = validate_document(document);
-
-            if !errors.is_empty() {
-                return Err(structure_error(
-                    &format!("existing seed {} is invalid", seed.metadata.id),
-                    &errors,
-                ));
-            }
-
+            seed_identity(seed).validate(document, &seed.path)?;
             files.retain(|file| file.relative_path != document.path);
         }
     }
@@ -201,7 +209,7 @@ pub(crate) fn change_status(
     if next_status == Status::Superseded {
         let target_id = superseded_by.expect("checked above");
         let (target_kind, _) = parse_id(target_id)?;
-        let (current_kind, _, _) = current.metadata.validate()?;
+        let (current_kind, _) = current.metadata.validate()?;
 
         if target_kind != current_kind.id_prefix() || target_id == id {
             return Err(MakespecError::Invalid(format!(
@@ -250,7 +258,7 @@ pub(crate) fn check(store: &impl ProjectStore) -> Result<Vec<String>> {
         let path = &document.path;
 
         match document.metadata.validate() {
-            Ok((kind, _, number)) => {
+            Ok((kind, number)) => {
                 let expected_prefix = format!("docs/{}/{number:04}-", kind.directory());
                 let valid_filename = path
                     .strip_prefix(&expected_prefix)
@@ -293,16 +301,12 @@ pub(crate) fn check(store: &impl ProjectStore) -> Result<Vec<String>> {
 
         match by_id.get(target_id) {
             Some(target)
-                if target.metadata.validate().is_ok_and(|(target_kind, _, _)| {
-                    metadata
-                        .validate()
-                        .is_ok_and(|(kind, _, _)| target_kind == kind)
-                }) && matches!(
+                if matches!(
                     target.metadata.status,
                     Status::Accepted | Status::Deprecated | Status::Superseded
                 ) => {}
             Some(_) => errors.push(format!(
-                "{}: supersession target `{target_id}` has a different kind or invalid status",
+                "{}: supersession target `{target_id}` has an invalid status",
                 document.path
             )),
             None => errors.push(format!(

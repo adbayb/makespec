@@ -4,14 +4,13 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use fs2::FileExt;
 use sha2::{Digest, Sha256};
 use tempfile::{Builder, NamedTempFile};
 
 use crate::core::{
     document::{
         Document, DocumentSummary, Kind, MAX_DOCUMENT_BYTES, NewDocument, Status, parse_document,
-        parse_id, parse_metadata_prefix, validate_document,
+        parse_id, parse_metadata_prefix,
     },
     error::{MakespecError, Result},
     service::{ProjectFile, ProjectStore},
@@ -65,10 +64,10 @@ impl FilesystemStore {
             .write(true)
             .open(&lock_path)?;
 
-        lock.lock_exclusive()?;
+        lock.lock()?;
 
         let result = action(&state_path);
-        let unlock_result = FileExt::unlock(&lock);
+        let unlock_result = lock.unlock();
 
         match (result, unlock_result) {
             (Err(error), _) => Err(error),
@@ -359,13 +358,9 @@ impl ProjectStore for FilesystemStore {
                         if let Some(seed) = &file.seed {
                             let parsed = parse_document(&existing, file.relative_path.clone())?;
 
-                            if parsed.metadata.id == seed.id
-                                && parsed.metadata.title == seed.title
-                                && parsed.metadata.status == Status::Accepted
-                                && validate_document(&parsed).is_empty()
-                            {
-                                continue;
-                            }
+                            seed.validate(&parsed, &file.relative_path)?;
+
+                            continue;
                         }
 
                         return Err(MakespecError::Invalid(format!(
@@ -432,7 +427,7 @@ impl ProjectStore for FilesystemStore {
             let content = read_prefix(&path, MAX_FRONTMATTER_BYTES)?;
             let relative = self.relative_path(&path)?;
             let metadata = parse_metadata_prefix(&content, &relative)?;
-            let (kind, _, _) = metadata.validate()?;
+            let (kind, _) = metadata.validate()?;
 
             summaries.push(DocumentSummary {
                 kind,

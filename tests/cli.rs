@@ -4,20 +4,14 @@ use std::{
     process::{Command, Output, Stdio},
 };
 
-use tempfile::tempdir;
+use tempfile::{TempDir, tempdir};
 
 const ADR_BODY: &str = "## Context\n\nThe project needs a focused decision.\n\n## Decision\n\nUse the proposed approach.\n\n## Consequences\n\nThe decision remains in Git.";
 
 #[test]
 fn cli_initializes_creates_lists_changes_status_and_checks() {
-    let project = tempdir().unwrap();
-    let initialized = makespec().arg("init").arg(project.path()).output().unwrap();
+    let project = initialized_project();
 
-    assert!(
-        initialized.status.success(),
-        "{}",
-        String::from_utf8_lossy(&initialized.stderr)
-    );
     assert!(
         project
             .path()
@@ -72,10 +66,7 @@ fn no_skills_skips_agent_skill_installation() {
 
 #[test]
 fn invalid_document_body_is_rejected_without_writing_a_record() {
-    let project = tempdir().unwrap();
-    let initialized = run(project.path(), &["init", "--no-skills"]);
-
-    assert!(initialized.status.success());
+    let project = initialized_project();
 
     let result = create(
         project.path(),
@@ -108,10 +99,7 @@ fn invalid_document_body_is_rejected_without_writing_a_record() {
 
 #[test]
 fn rfc_drafts_require_completion_before_review_and_acceptance() {
-    let project = tempdir().unwrap();
-    let initialized = run(project.path(), &["init"]);
-
-    assert!(initialized.status.success());
+    let project = initialized_project();
 
     let body = "## Context\n\nSearch local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Find records by title. |\n\n## Options\n\n| Criterion ID | Do nothing | Search |\n| --- | --- | --- |\n| FR-001 | | |\n\n**Chosen option:**";
     let created = create(project.path(), "rfc", "Local search", body);
@@ -190,13 +178,7 @@ fn rfc_drafts_require_completion_before_review_and_acceptance() {
 
 #[test]
 fn terminal_output_escapes_controls_in_titles_and_errors() {
-    let project = tempdir().unwrap();
-
-    assert!(
-        run(project.path(), &["init", "--no-skills"])
-            .status
-            .success()
-    );
+    let project = initialized_project();
 
     std::fs::write(
         project.path().join("docs/adrs/0002-untrusted-title.md"),
@@ -215,6 +197,19 @@ fn terminal_output_escapes_controls_in_titles_and_errors() {
         assert!(text.contains('\u{fffd}'));
         assert!(!text.contains('\u{1b}'));
     }
+}
+
+fn initialized_project() -> TempDir {
+    let project = tempdir().unwrap();
+    let initialized = makespec().arg("init").arg(project.path()).output().unwrap();
+
+    assert!(
+        initialized.status.success(),
+        "{}",
+        String::from_utf8_lossy(&initialized.stderr)
+    );
+
+    project
 }
 
 fn makespec() -> Command {

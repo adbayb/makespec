@@ -1,8 +1,8 @@
 [package]
 name = "makespec"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.89"
 description = "A local-first CLI for architecture decisions and RFCs"
 license = "MIT"
 
@@ -10,16 +10,12 @@ license = "MIT"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 clap = { version = "4.5", features = ["derive"] }
 deunicode = "1.6"
-fs2 = "0.4"
 pulldown-cmark = "0.13"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml_ng = "0.10"
 sha2 = "0.10"
 tempfile = "3.20"
 thiserror = "2.0"
-
-[target.'cfg(unix)'.dev-dependencies]
-nix = { version = "0.30", default-features = false, features = ["resource"] }
 
 [[bench]]
 name = "catalog"

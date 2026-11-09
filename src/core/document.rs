@@ -189,7 +189,7 @@ impl NewDocument {
 }
 
 impl Metadata {
-    pub fn validate(&self) -> Result<(Kind, Status, u32)> {
+    pub fn validate(&self) -> Result<(Kind, u32)> {
         let (prefix, number) = parse_id(&self.id)?;
         let kind = match prefix {
             "ADR" => Kind::Adr,
@@ -231,7 +231,7 @@ impl Metadata {
             (_, None) => {}
         }
 
-        Ok((kind, self.status, number))
+        Ok((kind, number))
     }
 }
 
@@ -439,7 +439,7 @@ pub fn update_metadata(document: &Document, metadata: Metadata) -> Result<Docume
 }
 
 pub fn validate_document(document: &Document) -> Vec<String> {
-    let Ok((kind, _, _)) = document.metadata.validate() else {
+    let Ok((kind, _)) = document.metadata.validate() else {
         return vec!["invalid document metadata".into()];
     };
 
