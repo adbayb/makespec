@@ -9,6 +9,18 @@ use tempfile::{TempDir, tempdir};
 const DECISION_BODY: &str = "## Context\n\nThe project needs a focused decision.\n\n## Decision\n\nUse the proposed approach.\n\n## Consequences\n\nThe decision remains in Git.";
 
 #[test]
+fn version_is_available_with_lowercase_short_flag() {
+    let project = tempdir().unwrap();
+    let version = run(project.path(), &["-v"]);
+    let long_version = run(project.path(), &["--version"]);
+
+    assert!(version.status.success());
+    assert!(String::from_utf8_lossy(&version.stdout).contains(env!("CARGO_PKG_VERSION")));
+    assert!(long_version.status.success());
+    assert_eq!(run(project.path(), &["-V"]).status.code(), Some(2));
+}
+
+#[test]
 fn cli_initializes_creates_lists_changes_status_and_checks() {
     let project = initialized_project();
 

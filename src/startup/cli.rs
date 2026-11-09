@@ -16,10 +16,13 @@ use crate::{
 #[command(
     name = "makespec",
     version,
+    disable_version_flag = true,
     disable_help_subcommand = true,
     about = "Manage decisions and specifications in your repository"
 )]
 struct Cli {
+    #[arg(short = 'v', long, action = clap::ArgAction::Version)]
+    version: Option<bool>,
     #[command(subcommand)]
     command: Option<CommandLine>,
 }
