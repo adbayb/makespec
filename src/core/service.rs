@@ -10,8 +10,7 @@ use super::{
     error::{MakespecError, Result},
 };
 
-const SEED_DECISION_TITLE: &str = "Use decisions and specifications";
-const SEED_SPECIFICATION_TITLE: &str = "Define the specification format";
+const SEED_DECISION_TITLE: &str = "Use Makespec to manage decisions and specifications";
 
 #[derive(Clone, Debug)]
 pub(crate) struct ProjectFile {
@@ -76,36 +75,20 @@ pub(crate) fn initialize(
         date,
         decision_seed_body(),
     )?;
-    let specification = seed_document(
-        Kind::Specification,
-        SEED_SPECIFICATION_TITLE,
-        date,
-        specification_seed_body(),
-    )?;
+    let errors = validate_document(&decision);
 
-    for seed in [&decision, &specification] {
-        let errors = validate_document(seed);
-
-        if !errors.is_empty() {
-            return Err(structure_error(
-                &format!("built-in seed {} is invalid", seed.metadata.id),
-                &errors,
-            ));
-        }
+    if !errors.is_empty() {
+        return Err(structure_error(
+            &format!("built-in seed {} is invalid", decision.metadata.id),
+            &errors,
+        ));
     }
 
-    let mut files = vec![
-        ProjectFile {
-            relative_path: decision.path.clone(),
-            content: decision.raw.clone(),
-            seed: Some(seed_identity(&decision)),
-        },
-        ProjectFile {
-            relative_path: specification.path.clone(),
-            content: specification.raw.clone(),
-            seed: Some(seed_identity(&specification)),
-        },
-    ];
+    let mut files = vec![ProjectFile {
+        relative_path: decision.path.clone(),
+        content: decision.raw.clone(),
+        seed: Some(seed_identity(&decision)),
+    }];
 
     for (relative_path, content) in skill_files {
         files.push(ProjectFile {
@@ -117,14 +100,25 @@ pub(crate) fn initialize(
 
     let existing = store.existing_documents()?;
 
-    for seed in [&decision, &specification] {
-        if let Some(document) = existing
-            .iter()
-            .find(|document| document.metadata.id == seed.metadata.id)
-        {
-            seed_identity(seed).validate(document, &seed.path)?;
-            files.retain(|file| file.relative_path != document.path);
-        }
+    if !existing.iter().any(|document| {
+        document
+            .metadata
+            .id
+            .starts_with(Kind::Specification.id_prefix())
+    }) {
+        files.push(ProjectFile {
+            relative_path: "docs/specifications/.gitkeep".into(),
+            content: String::new(),
+            seed: None,
+        });
+    }
+
+    if let Some(document) = existing
+        .iter()
+        .find(|document| document.metadata.id == decision.metadata.id)
+    {
+        seed_identity(&decision).validate(document, &decision.path)?;
+        files.retain(|file| file.relative_path != document.path);
     }
 
     store.initialize(&files)
@@ -374,11 +368,35 @@ fn structure_error(context: &str, errors: &[String]) -> MakespecError {
 }
 
 fn decision_seed_body() -> &'static str {
-    "## Context\n\nProject changes need two levels of design records: focused decisions and broader functionality specifications. A single format makes small choices hard to find and forces feature specifications into an unsuitable structure.\n\n## Decision\n\nUse decisions for small, focused choices and specifications for functionality or other substantial changes. Decisions follow the architecture decision record (ADR) format; specifications follow the request for comments (RFC) format and include product requirements documents (PRDs). Keep both as Markdown files in `docs/decisions` and `docs/specifications`, respectively. Give each kind its own incrementing ID, creation date, and front-matter status. Use a specification when a change needs requirements, constraints, alternatives, and an adoption plan; record a contained choice as a decision.\n\n## Consequences\n\nReviewers can trace specifications and decisions in Git. Authors must keep status and structure valid, and specification authors must compare every option against the same criteria. The repository gains a small amount of documentation overhead, but does not need a service or database."
+    r#"## Context
+
+Contributors need a shared way to document proposed functionality and preserve the reasoning behind focused choices. Humans and coding agents need to find and review these records in the repository.
+
+## Decision
+
+Use Makespec to create, validate, and manage the lifecycle of decisions and specifications stored as Markdown. Makespec relies on the architecture decision record (ADR) format for focused decisions and the request for comments (RFC) format for functionality specifications, including product requirements documents (PRDs).
+
+Keep decisions in `docs/decisions/` and specifications in `docs/specifications/`. Contributors may write and edit content with ordinary editors or agent tools.
+
+## Consequences
+
+Contributors gain stable references and a shared lifecycle. They must keep records current and validate changes with `makespec check`. Makespec becomes a contributor tool, but reading the records does not require the binary. Contributors can review and version records in Git.
+
+Follow the installed skill, templates, and command reference for authoring and review rather than maintaining a separate workflow specification.
+
+## References
+
+- [Contribution workflow](../../.agents/skills/makespec/SKILL.md#workflow) defines authoring, planning, and approval boundaries.
+- [Decision template](../../.agents/skills/makespec/references/decision-template.md) and [specification template](../../.agents/skills/makespec/references/specification-template.md) define record structure.
+- [Command reference](../../.agents/skills/makespec/references/cli.md) defines syntax and lifecycle transitions."#
 }
 
-fn specification_seed_body() -> &'static str {
-    r#"## Context
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn complete_specification_body() -> &'static str {
+        r#"## Context
 
 Define a consistent specification format for functionality. Specifications use the request for comments (RFC) format and include product requirements documents (PRDs) as well as technical change proposals. Authors need a reviewable record of the problem, evaluation criteria, options, chosen design, and adoption approach without a hosted service.
 
@@ -434,12 +452,8 @@ Comparison labels require supporting evidence; the CLI checks structure and elig
 
 ## Adoption
 
-Initialize a repository with the CLI, which creates the accepted format specification and adoption decision. Create drafts from the bundled template and run `makespec check` after edits. Complete a draft before promoting it to proposed, then request acceptance after review. Verify adoption by checking the seed records and exercising the draft-to-proposed-to-accepted workflow."#
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
+Create drafts from the bundled template and run `makespec check` after edits. Complete a draft before promoting it to proposed, then request acceptance after review. Verify adoption by exercising the draft-to-proposed-to-accepted workflow."#
+    }
 
     const DRAFT_SPECIFICATION_BODY: &str = "## Context\n\nLet users search local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Search records by title. |\n\n## Options\n\n| Criterion ID | No change | Local search |\n| --- | --- | --- |\n| FR-001 | | |\n\n**Chosen option:**";
 
@@ -557,15 +571,18 @@ mod tests {
 
     #[test]
     fn references_are_optional_unique_nonempty_and_in_template_order() {
-        let references = "## References\n\n- [RFC-0001: Define the specification format](../specifications/0001-define-the-specification-format.md) defines the format.";
+        let references = "## References\n\n- [ADR-0001: Use Makespec to manage decisions and specifications](../decisions/0001-use-makespec-to-manage-decisions-and-specifications.md) adopts the workflow.";
 
         for (kind, body) in [
-            (Kind::Decision, decision_seed_body().to_string()),
+            (
+                Kind::Decision,
+                "## Context\n\nContributors need a focused choice.\n\n## Decision\n\nUse the proposed approach.\n\n## Consequences\n\nKeep the decision in Git.".to_string(),
+            ),
             (
                 Kind::Specification,
                 format!(
                     "{}\n\n## Open questions\n\nWhich follow-up metrics would help?",
-                    specification_seed_body()
+                    complete_specification_body()
                 ),
             ),
         ] {
@@ -599,7 +616,7 @@ mod tests {
 
         let body = format!(
             "{}\n\n{references}\n\n## Open questions\n\nWhich follow-up metrics would help?",
-            specification_seed_body()
+            complete_specification_body()
         );
         let errors = validate_document(&specification(&body, Status::Proposed));
 
@@ -612,8 +629,11 @@ mod tests {
     #[test]
     fn specification_comparisons_validate_descriptions_labels_and_chosen_option_eligibility() {
         assert!(
-            validate_document(&specification(specification_seed_body(), Status::Proposed))
-                .is_empty()
+            validate_document(&specification(
+                complete_specification_body(),
+                Status::Proposed
+            ))
+            .is_empty()
         );
 
         for (original, replacement, expected, valid_draft) in [
@@ -642,7 +662,7 @@ mod tests {
                 false,
             ),
         ] {
-            let body = specification_seed_body().replace(original, replacement);
+            let body = complete_specification_body().replace(original, replacement);
             let errors = validate_document(&specification(&body, Status::Proposed));
 
             assert!(
@@ -658,7 +678,7 @@ mod tests {
 
     #[test]
     fn specification_reports_requirement_and_constraint_errors_together() {
-        let body = specification_seed_body()
+        let body = complete_specification_body()
             .replace(
                 "| FR-001 | MUST | A specification describes functionality requirements, constraints, and qualitative alternatives. |",
                 "| FR-001 | MUST | |",

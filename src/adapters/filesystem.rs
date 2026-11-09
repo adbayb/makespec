@@ -172,7 +172,8 @@ impl FilesystemStore {
                 }
 
                 if entry.file_name().to_str().is_some_and(|name| {
-                    name.starts_with(STAGING_PREFIX) && name.ends_with(STAGING_SUFFIX)
+                    (kind == Kind::Specification && name == ".gitkeep")
+                        || (name.starts_with(STAGING_PREFIX) && name.ends_with(STAGING_SUFFIX))
                 }) {
                     continue;
                 }
@@ -220,13 +221,22 @@ impl FilesystemStore {
 
     fn ensure_safe_parent(&self, relative: &str, create: bool) -> Result<PathBuf> {
         let relative_path = safe_relative_path(relative)?;
-        let mut parent = self.root.clone();
-        let components: Vec<_> = relative_path.components().collect();
 
-        for component in components.iter().take(components.len().saturating_sub(1)) {
+        if let Some(parent) = relative_path.parent() {
+            self.ensure_safe_directory(parent, create)?;
+        }
+
+        Ok(self.root.join(relative_path))
+    }
+
+    fn ensure_safe_directory(&self, relative: &Path, create: bool) -> Result<()> {
+        let mut parent = self.root.clone();
+
+        for component in relative.components() {
             let Component::Normal(name) = component else {
                 return Err(MakespecError::Invalid(format!(
-                    "invalid project-relative path `{relative}`"
+                    "invalid project-relative directory `{}`",
+                    relative.display()
                 )));
             };
 
@@ -247,7 +257,7 @@ impl FilesystemStore {
             }
         }
 
-        Ok(self.root.join(relative_path))
+        Ok(())
     }
 
     fn read_counters(&self, state_path: &Path) -> Result<Counters> {
@@ -333,6 +343,10 @@ impl ProjectStore for FilesystemStore {
             let mut seen = std::collections::BTreeSet::new();
             let mut pending = Vec::new();
 
+            for kind in [Kind::Decision, Kind::Specification] {
+                self.ensure_safe_directory(&Path::new("docs").join(kind.directory()), false)?;
+            }
+
             for file in files {
                 if !seen.insert(file.relative_path.as_str()) {
                     return Err(MakespecError::Invalid(format!(
@@ -376,6 +390,10 @@ impl ProjectStore for FilesystemStore {
                 }
 
                 pending.push(file);
+            }
+
+            for kind in [Kind::Decision, Kind::Specification] {
+                self.ensure_safe_directory(&Path::new("docs").join(kind.directory()), true)?;
             }
 
             let mut staged = Vec::new();
@@ -680,12 +698,63 @@ mod tests {
     }
 
     #[test]
-    fn initialization_is_idempotent_and_seed_documents_check() {
-        let (_directory, store) = initialized_store();
+    fn initialization_creates_only_the_adoption_decision_and_is_idempotent() {
+        let (directory, store) = initialized_store();
+        let original = store.document("ADR-0001").unwrap().raw;
+
+        assert_eq!(
+            fs::read_dir(directory.path().join("docs/specifications"))
+                .unwrap()
+                .count(),
+            1
+        );
+        assert!(
+            fs::read(directory.path().join("docs/specifications/.gitkeep"))
+                .unwrap()
+                .is_empty()
+        );
+
         service::initialize(&store, "2026-11-09", embedded::SKILL_FILES).unwrap();
 
         assert!(service::check(&store).unwrap().is_empty());
-        assert_eq!(service::list(&store).unwrap().len(), 2);
+        assert_eq!(service::list(&store).unwrap().len(), 1);
+        assert_eq!(store.document("ADR-0001").unwrap().raw, original);
+    }
+
+    #[test]
+    fn initialization_preserves_existing_specifications_and_their_sequence() {
+        let (directory, store) = initialized_store();
+        let body =
+            include_str!("../../.agents/skills/makespec/references/specification-template.md");
+        let specification = service::create(
+            &store,
+            Kind::Specification,
+            "Project functionality".into(),
+            body.into(),
+            "2026-11-09",
+        )
+        .unwrap();
+
+        assert_eq!(specification.metadata.id, "RFC-0001");
+
+        let placeholder = directory.path().join("docs/specifications/.gitkeep");
+
+        fs::remove_file(&placeholder).unwrap();
+        service::initialize(&store, "2026-11-09", embedded::SKILL_FILES).unwrap();
+
+        assert!(!placeholder.exists());
+        assert_eq!(store.document("RFC-0001").unwrap().raw, specification.raw);
+
+        let next = service::create(
+            &store,
+            Kind::Specification,
+            "More functionality".into(),
+            body.into(),
+            "2026-11-09",
+        )
+        .unwrap();
+
+        assert_eq!(next.metadata.id, "RFC-0002");
     }
 
     #[test]
@@ -835,7 +904,7 @@ mod tests {
 
         fs::write(path, content).unwrap();
 
-        assert_eq!(service::list(&store).unwrap().len(), 3);
+        assert_eq!(service::list(&store).unwrap().len(), 2);
         assert!(store.document("ADR-0002").is_err());
     }
 
@@ -863,13 +932,25 @@ mod tests {
     }
 
     #[test]
+    fn discovery_rejects_non_regular_specification_placeholders() {
+        let (directory, store) = initialized_store();
+        let placeholder = directory.path().join("docs/specifications/.gitkeep");
+
+        fs::remove_file(&placeholder).unwrap();
+        fs::create_dir(&placeholder).unwrap();
+
+        assert!(store.documents().is_err());
+        assert!(store.catalog().is_err());
+    }
+
+    #[test]
     fn discovery_ignores_staging_files_but_rejects_other_entries() {
         let (directory, store) = initialized_store();
         let unexpected = directory.path().join("docs/decisions/unexpected.txt");
         let _staged = stage_file(&unexpected, "unfinished content").unwrap();
 
-        assert_eq!(store.documents().unwrap().len(), 2);
-        assert_eq!(store.catalog().unwrap().len(), 2);
+        assert_eq!(store.documents().unwrap().len(), 1);
+        assert_eq!(store.catalog().unwrap().len(), 1);
 
         fs::write(&unexpected, "not a document").unwrap();
 
@@ -888,24 +969,22 @@ mod tests {
     fn initialization_rejects_symlinked_document_directory() {
         use std::os::unix::fs::symlink;
 
-        let directory = tempfile::tempdir().unwrap();
-        let outside = tempfile::tempdir().unwrap();
+        for kind in ["decisions", "specifications"] {
+            let directory = tempfile::tempdir().unwrap();
+            let outside = tempfile::tempdir().unwrap();
 
-        fs::create_dir(directory.path().join("docs")).unwrap();
-        symlink(
-            outside.path(),
-            directory.path().join("docs").join("decisions"),
-        )
-        .unwrap();
+            fs::create_dir(directory.path().join("docs")).unwrap();
+            symlink(outside.path(), directory.path().join("docs").join(kind)).unwrap();
 
-        let store = FilesystemStore::new(directory.path()).unwrap();
-        let files = [ProjectFile {
-            relative_path: "docs/decisions/0001-example.md".into(),
-            content: "document".into(),
-            seed: None,
-        }];
+            let store = FilesystemStore::new(directory.path()).unwrap();
+            let files = [ProjectFile {
+                relative_path: "docs/decisions/0001-example.md".into(),
+                content: "document".into(),
+                seed: None,
+            }];
 
-        assert!(store.initialize(&files).is_err());
-        assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
+            assert!(store.initialize(&files).is_err());
+            assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
+        }
     }
 }

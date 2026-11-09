@@ -57,7 +57,7 @@ makespec init
 makespec check
 ```
 
-`init` creates `docs/decisions/`, `docs/specifications/`, an accepted adoption decision, an accepted format specification, and `.agents/skills/makespec/` in the current directory. Run all commands from your project root.
+`init` creates both document directories, an accepted "Use Makespec to manage decisions and specifications" decision, and the skill with its templates and command reference under `.agents/skills/makespec/`. When no specifications exist, it adds an empty `docs/specifications/.gitkeep` so Git can track the directory. It creates no specification and preserves existing records. Run all commands from your project root.
 
 ### 3. Create and review a decision
 
@@ -144,7 +144,7 @@ Each document kind has its own incrementing IDs. Records contain a date and use 
 
 Makespec validates paths and metadata, limits document input to 2 MiB, uses exclusive creation, and checks for external edits before replacing files. It keeps ID allocation locks outside the repository. Advisory locks coordinate Makespec processes but cannot control external editors.
 
-Read [RFC-0002: Makespec product requirements document (PRD)](docs/specifications/0002-makespec-product-requirements-document.md) for the product and implementation specification.
+Read [RFC-0001: Makespec product requirements document (PRD)](docs/specifications/0001-makespec-product-requirements-document.md) for the product and implementation specification.
 
 <br>
 

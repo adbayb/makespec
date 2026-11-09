@@ -10,7 +10,7 @@ Install [stable Rust](https://rustup.rs/) and Git, then clone the repository. Yo
 cargo run -- --help
 ```
 
-Read [RFC-0002: Makespec product requirements document (PRD)](docs/specifications/0002-makespec-product-requirements-document.md) and the [contributor instructions](AGENTS.md) before making changes.
+Read [RFC-0001: Makespec product requirements document (PRD)](docs/specifications/0001-makespec-product-requirements-document.md) and the [contributor instructions](AGENTS.md) before making changes.
 
 - For bug reports, include reproduction steps, the Makespec version, your operating system, and the expected and actual behavior.
 - For features, describe the use case and discuss changes to the document format or command surface before implementing them.
@@ -44,7 +44,7 @@ Install [Hyperfine 2 or later](https://github.com/sharkdp/hyperfine#installation
 cargo bench --bench catalog -- 500
 ```
 
-Cargo builds the optimized CLI and a Rust catalog generator. Hyperfine measures wall time and peak resident set size (RSS) for `list` and `check`, using three warmup runs followed by repeated measurements. The catalog defaults to 500 synthetic decisions plus the two seed records.
+Cargo builds the optimized CLI and a Rust catalog generator. Hyperfine measures wall time and peak resident set size (RSS) for `list` and `check`, using three warmup runs followed by repeated measurements. The catalog defaults to 500 synthetic decisions plus the adoption decision.
 
 Provisional macOS ARM64 budgets for this catalog are 100 ms per command and 32 MiB peak resident set size. Recalibrate them on release hardware. Linux measurements can include Hyperfine's inherited memory floor for small processes; see its [metric definitions](https://github.com/sharkdp/hyperfine#choosing-metrics-and-units).
 

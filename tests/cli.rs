@@ -12,6 +12,18 @@ const DECISION_BODY: &str = "## Context\n\nThe project needs a focused decision.
 fn cli_initializes_creates_lists_changes_status_and_checks() {
     let project = initialized_project();
 
+    assert_eq!(
+        std::fs::read_dir(project.path().join("docs/specifications"))
+            .unwrap()
+            .count(),
+        1
+    );
+    assert!(
+        project
+            .path()
+            .join("docs/specifications/.gitkeep")
+            .is_file()
+    );
     assert!(
         project
             .path()
@@ -150,7 +162,7 @@ fn supersession_requires_a_positional_accepted_replacement() {
     let original = std::fs::read_to_string(
         project
             .path()
-            .join("docs/decisions/0001-use-decisions-and-specifications.md"),
+            .join("docs/decisions/0001-use-makespec-to-manage-decisions-and-specifications.md"),
     )
     .unwrap();
 
@@ -204,16 +216,18 @@ fn specification_drafts_require_completion_before_review_and_acceptance() {
         String::from_utf8_lossy(&created.stderr)
     );
 
+    assert!(String::from_utf8_lossy(&created.stdout).contains("RFC-0001"));
+
     let path = project
         .path()
-        .join("docs/specifications/0002-local-search.md");
+        .join("docs/specifications/0001-local-search.md");
     let draft = std::fs::read_to_string(&path).unwrap();
 
     assert!(draft.contains("status: draft\n"));
     assert!(run(project.path(), &["check"]).status.success());
 
     for next in ["accepted", "proposed"] {
-        let result = run(project.path(), &["status", "RFC-0002", next]);
+        let result = run(project.path(), &["status", "RFC-0001", next]);
 
         assert!(!result.status.success());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), draft);
@@ -230,7 +244,7 @@ fn specification_drafts_require_completion_before_review_and_acceptance() {
     std::fs::write(&path, &completed).unwrap();
 
     for next in ["proposed", "draft", "proposed", "accepted"] {
-        let result = run(project.path(), &["status", "RFC-0002", next]);
+        let result = run(project.path(), &["status", "RFC-0001", next]);
 
         assert!(
             result.status.success(),
@@ -243,7 +257,7 @@ fn specification_drafts_require_completion_before_review_and_acceptance() {
 
     assert!(rejected_draft.status.success());
 
-    let rejected = run(project.path(), &["status", "RFC-0003", "rejected"]);
+    let rejected = run(project.path(), &["status", "RFC-0002", "rejected"]);
 
     assert!(rejected.status.success());
 

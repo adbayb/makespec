@@ -28,5 +28,5 @@ Authors can make invalid external edits, so check must report structural errors.
 ## References
 
 - [Document rules](../../src/core/document.rs) define metadata, parsing, and rendering.
-- [RFC-0001: Define the specification format](../specifications/0001-define-the-specification-format.md) defines canonical specification structure and comparison labels.
-- [ADR-0001: Use decisions and specifications](0001-use-decisions-and-specifications.md) adopts the two record types.
+- [Specification template](../../.agents/skills/makespec/references/specification-template.md) defines canonical specification structure and comparison labels.
+- [ADR-0001: Use Makespec to manage decisions and specifications](0001-use-makespec-to-manage-decisions-and-specifications.md) adopts Makespec and the two record types.
