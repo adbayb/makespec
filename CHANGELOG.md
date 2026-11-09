@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/adbayb/makespec/compare/v0.1.0...v0.1.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* change version flag to lowercase ([f5f33ee](https://github.com/adbayb/makespec/commit/f5f33eed1239c34867563beb9f92f92c1811e469))
+
 ## 0.1.0 (2026-11-09)
 
 
