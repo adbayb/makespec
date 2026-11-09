@@ -32,8 +32,8 @@ impl Kind {
 
     pub fn directory(self) -> &'static str {
         match self {
-            Self::Adr => "adrs",
-            Self::Rfc => "rfcs",
+            Self::Adr => "decisions",
+            Self::Rfc => "specifications",
         }
     }
 }
@@ -1027,7 +1027,7 @@ mod tests {
     #[test]
     fn removed_front_matter_fields_are_omitted_when_documents_are_updated() {
         let legacy = "---\nid: ADR-0001\nkind: rfc\ntitle: Old title\nslug: old-title\ndate: 2026-11-09\nstatus: proposed\nschema_version: 99\n---\n\n# ADR-0001: Old title\n\n## Context\n\nIssue.\n\n## Decision\n\nChoice.\n\n## Consequences\n\nTrade-off.";
-        let document = parse_document(legacy, "docs/adrs/0001-old-title.md".into()).unwrap();
+        let document = parse_document(legacy, "docs/decisions/0001-old-title.md".into()).unwrap();
         let mut metadata = document.metadata.clone();
         metadata.status = Status::Accepted;
 
@@ -1050,7 +1050,7 @@ mod tests {
                 extra: BTreeMap::new(),
             },
             body: "# ADR-0001: Use a focused record\n\n## Context\n\nIssue.\n\n## Decision\n\nChoice.\n\n## Consequences\n\nTrade-off.".into(),
-            path: "docs/adrs/0001-use-a-focused-record.md".into(),
+            path: "docs/decisions/0001-use-a-focused-record.md".into(),
             raw: String::new(),
         };
 
@@ -1122,7 +1122,7 @@ mod tests {
         )
         .unwrap()
         .replace('\n', "\r\n");
-        let document = parse_document(&raw, "docs/adrs/0001-title.md".into()).unwrap();
+        let document = parse_document(&raw, "docs/decisions/0001-title.md".into()).unwrap();
         let mut accepted_metadata = metadata;
         accepted_metadata.status = Status::Accepted;
 

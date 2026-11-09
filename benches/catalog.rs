@@ -37,7 +37,7 @@ fn main() -> Result<()> {
             "---\nid: ADR-{number:04}\ntitle: {title}\ndate: 2026-01-01\nstatus: proposed\n---\n\n# ADR-{number:04}: {title}\n\n{BODY}\n"
         );
         let path = project.path().join(format!(
-            "docs/adrs/{number:04}-benchmark-decision-{number:04}.md"
+            "docs/decisions/{number:04}-benchmark-decision-{number:04}.md"
         ));
 
         fs::write(path, content)?;

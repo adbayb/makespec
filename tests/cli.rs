@@ -109,7 +109,7 @@ fn supersession_requires_a_positional_accepted_replacement() {
     let original = std::fs::read_to_string(
         project
             .path()
-            .join("docs/adrs/0001-use-adrs-for-decisions-and-rfcs-for-changes.md"),
+            .join("docs/decisions/0001-use-adrs-for-decisions-and-rfcs-for-changes.md"),
     )
     .unwrap();
 
@@ -133,7 +133,7 @@ fn invalid_document_body_is_rejected_without_writing_a_record() {
         String::from_utf8_lossy(&result.stderr).contains("missing required `## Decision` section")
     );
     assert_eq!(
-        std::fs::read_dir(project.path().join("docs/adrs"))
+        std::fs::read_dir(project.path().join("docs/decisions"))
             .unwrap()
             .count(),
         1
@@ -163,7 +163,9 @@ fn rfc_drafts_require_completion_before_review_and_acceptance() {
         String::from_utf8_lossy(&created.stderr)
     );
 
-    let path = project.path().join("docs/rfcs/0002-local-search.md");
+    let path = project
+        .path()
+        .join("docs/specifications/0002-local-search.md");
     let draft = std::fs::read_to_string(&path).unwrap();
 
     assert!(draft.contains("status: draft\n"));
@@ -234,7 +236,7 @@ fn terminal_output_escapes_controls_in_titles_and_errors() {
     let project = initialized_project();
 
     std::fs::write(
-        project.path().join("docs/adrs/0002-untrusted-title.md"),
+        project.path().join("docs/decisions/0002-untrusted-title.md"),
         "---\nid: ADR-0002\ntitle: \"Unsafe\\u001b[2J title\"\ndate: 2026-11-09\nstatus: draft\n---\n",
     ).unwrap();
 

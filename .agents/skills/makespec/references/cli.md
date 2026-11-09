@@ -2,6 +2,8 @@
 
 Run commands from the project root.
 
+Store ADRs in `docs/decisions/` and RFCs in `docs/specifications/`.
+
 - `makespec`, `makespec --help`, or `makespec -h`: print help.
 - `makespec init`: initialize document folders, accepted seed records, and the skill in the current directory.
 - `makespec new adr "Title"` or `makespec new rfc "Title"`: read a Markdown body from stdin, validate its structure, and create a draft record. The body must omit front matter and the ID/title heading. If stdin is a terminal, the command fails instead of waiting.

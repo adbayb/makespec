@@ -364,7 +364,7 @@ fn structure_error(context: &str, errors: &[String]) -> MakespecError {
 }
 
 fn adr_seed_body() -> &'static str {
-    "## Context\n\nProject changes need two levels of design records: focused decisions and broader functionality proposals. A single format makes small choices hard to find and forces feature proposals into an unsuitable structure.\n\n## Decision\n\nUse ADRs for small, focused decisions and RFCs to specify functionality or other substantial changes. Keep both as Markdown files in `docs/adrs` and `docs/rfcs`, respectively. Give each kind its own incrementing ID, creation date, and front-matter status. Use an RFC when a change needs requirements, constraints, alternatives, and an adoption plan; record a contained choice as an ADR.\n\n## Consequences\n\nReviewers can trace proposals and decisions in Git. Authors must keep status and structure valid, and RFC authors must compare every option against the same criteria. The repository gains a small amount of documentation overhead, but does not need a service or database."
+    "## Context\n\nProject changes need two levels of design records: focused decisions and broader functionality proposals. A single format makes small choices hard to find and forces feature proposals into an unsuitable structure.\n\n## Decision\n\nUse ADRs for small, focused decisions and RFCs to specify functionality or other substantial changes. Keep both as Markdown files in `docs/decisions` and `docs/specifications`, respectively. Give each kind its own incrementing ID, creation date, and front-matter status. Use an RFC when a change needs requirements, constraints, alternatives, and an adoption plan; record a contained choice as an ADR.\n\n## Consequences\n\nReviewers can trace proposals and decisions in Git. Authors must keep status and structure valid, and RFC authors must compare every option against the same criteria. The repository gains a small amount of documentation overhead, but does not need a service or database."
 }
 
 fn rfc_seed_body() -> &'static str {
@@ -548,7 +548,7 @@ mod tests {
 
     #[test]
     fn references_are_optional_unique_nonempty_and_in_template_order() {
-        let references = "## References\n\n- [RFC-0001: Specify the RFC format](../rfcs/0001-specify-the-rfc-format.md) defines the format.";
+        let references = "## References\n\n- [RFC-0001: Specify the RFC format](../specifications/0001-specify-the-rfc-format.md) defines the format.";
 
         for (kind, body) in [
             (Kind::Adr, adr_seed_body().to_string()),

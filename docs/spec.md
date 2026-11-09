@@ -14,7 +14,7 @@ These files define their respective contracts; this specification covers the rem
 
 ## Records and identity
 
-Store records in `docs/adrs/` and `docs/rfcs/`. Each kind has its own positive `u32` sequence, starting at `0001` and expanding beyond four digits without extra leading zeros. Use IDs such as `ADR-0001` and filenames such as `0001-use-local-storage.md`.
+Store ADRs in `docs/decisions/` and RFCs in `docs/specifications/`. Each kind has its own positive `u32` sequence, starting at `0001` and expanding beyond four digits without extra leading zeros. Use IDs such as `ADR-0001` and filenames such as `0001-use-local-storage.md`.
 
 The CLI adds YAML front matter containing `id`, `title`, `date` (`YYYY-MM-DD`), and `status`, plus a matching `# <ID>: <Title>` heading. Derive kind from the ID prefix. Keep status and date only in front matter; do not duplicate `kind`, `slug`, or `schema_version`.
 

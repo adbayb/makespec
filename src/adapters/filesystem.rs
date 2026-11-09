@@ -720,7 +720,7 @@ mod tests {
     #[test]
     fn creation_conflicts_preserve_existing_files_and_reserved_ids() {
         let (directory, store) = initialized_store();
-        let destination = directory.path().join("docs/adrs/0002-collision.md");
+        let destination = directory.path().join("docs/decisions/0002-collision.md");
         let existing = store.document("ADR-0001").unwrap().raw;
 
         fs::write(&destination, &existing).unwrap();
@@ -794,7 +794,9 @@ mod tests {
     #[test]
     fn catalog_lists_metadata_without_loading_large_bodies() {
         let (directory, store) = initialized_store();
-        let path = directory.path().join("docs/adrs/0002-large-document.md");
+        let path = directory
+            .path()
+            .join("docs/decisions/0002-large-document.md");
         let content = format!(
             "---\nid: ADR-0002\ntitle: Large document\ndate: 2026-11-09\nstatus: proposed\n---\n\n{}",
             "x".repeat(MAX_DOCUMENT_BYTES as usize + 1)
@@ -811,7 +813,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let store = FilesystemStore::new(directory.path()).unwrap();
 
-        fs::create_dir_all(directory.path().join("docs/adrs")).unwrap();
+        fs::create_dir_all(directory.path().join("docs/decisions")).unwrap();
 
         assert!(store.existing_documents().unwrap().is_empty());
         assert!(matches!(
@@ -823,7 +825,7 @@ mod tests {
             Err(MakespecError::NotInitialized)
         ));
 
-        fs::create_dir(directory.path().join("docs/rfcs")).unwrap();
+        fs::create_dir(directory.path().join("docs/specifications")).unwrap();
 
         assert!(store.documents().unwrap().is_empty());
         assert!(store.catalog().unwrap().is_empty());
@@ -832,7 +834,7 @@ mod tests {
     #[test]
     fn discovery_ignores_staging_files_but_rejects_other_entries() {
         let (directory, store) = initialized_store();
-        let unexpected = directory.path().join("docs/adrs/unexpected.txt");
+        let unexpected = directory.path().join("docs/decisions/unexpected.txt");
         let _staged = stage_file(&unexpected, "unfinished content").unwrap();
 
         assert_eq!(store.documents().unwrap().len(), 2);
@@ -859,11 +861,15 @@ mod tests {
         let outside = tempfile::tempdir().unwrap();
 
         fs::create_dir(directory.path().join("docs")).unwrap();
-        symlink(outside.path(), directory.path().join("docs").join("adrs")).unwrap();
+        symlink(
+            outside.path(),
+            directory.path().join("docs").join("decisions"),
+        )
+        .unwrap();
 
         let store = FilesystemStore::new(directory.path()).unwrap();
         let files = [ProjectFile {
-            relative_path: "docs/adrs/0001-example.md".into(),
+            relative_path: "docs/decisions/0001-example.md".into(),
             content: "document".into(),
             seed: None,
         }];

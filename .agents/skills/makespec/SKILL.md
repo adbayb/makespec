@@ -13,7 +13,7 @@ Read [the writing guide](references/writing.md) before drafting, editing, or rev
 
 ## Workflow
 
-1. Read relevant accepted RFCs for requirements and ADRs for design constraints when planning a change or authoring records. Cite their IDs. Distinguish drafts and proposals from accepted commitments, and ask the user to resolve conflicting or missing decisions.
+1. Read relevant accepted RFCs from `docs/specifications/` for requirements and ADRs from `docs/decisions/` for design constraints when planning a change or authoring records. Cite their IDs. Distinguish drafts and proposals from accepted commitments, and ask the user to resolve conflicting or missing decisions.
 2. In plan mode, prepare the requested implementation plan or describe the intended record without creating or changing records. Obtain approval before authoring records or implementing changes. Reading or accepting records does not authorize those actions.
 3. Treat a product requirements document (PRD) as a product-oriented RFC using the same format and lifecycle. Capture the problem, intended users, goals, scope, and success criteria in Context and Requirements and constraints. RFCs may link to broader or focused RFCs; cite the owning RFC and requirement IDs instead of maintaining duplicate requirements.
 4. Once authoring is authorized, prepare complete, review-ready content and replace template prompts. For RFCs, include functional requirements (FR) and only relevant non-functional requirements (NFR) or constraints. Use record IDs and relative Markdown links in the optional final References section, explain each relationship, and include external sources when relevant. Do not invent decisions or evidence to fill gaps.

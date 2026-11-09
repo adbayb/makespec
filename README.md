@@ -10,7 +10,7 @@
 - Record small, focused decisions with architecture decision records (ADRs) and specify functionality with proposals (RFCs).
 - Compare RFC alternatives against functional requirements (FR), non-functional requirements (NFR), and constraints using qualitative labels and PASS/FAIL gates.
 - Create proposals, list records, and change status through five CLI commands.
-- Keep dated, numbered records in `docs/adrs/` and `docs/rfcs/`, and check their structure with `makespec check`.
+- Keep dated, numbered records in `docs/decisions/` and `docs/specifications/`, and check their structure with `makespec check`.
 - Give coding agents the bundled skill so they can create and manage records through the CLI.
 
 Makespec runs locally with a standalone Rust binary. It makes no network or LLM-provider calls and collects no telemetry.
@@ -57,7 +57,7 @@ makespec init
 makespec check
 ```
 
-`init` creates `docs/adrs/`, `docs/rfcs/`, an accepted adoption ADR, an accepted format RFC, and `.agents/skills/makespec/` in the current directory. Run all commands from your project root.
+`init` creates `docs/decisions/`, `docs/specifications/`, an accepted adoption ADR, an accepted format RFC, and `.agents/skills/makespec/` in the current directory. Run all commands from your project root.
 
 ### 3. Create and review a decision
 
