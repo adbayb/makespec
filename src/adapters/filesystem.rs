@@ -427,10 +427,8 @@ impl ProjectStore for FilesystemStore {
             let content = read_prefix(&path, MAX_FRONTMATTER_BYTES)?;
             let relative = self.relative_path(&path)?;
             let metadata = parse_metadata_prefix(&content, &relative)?;
-            let (kind, _) = metadata.validate()?;
 
             summaries.push(DocumentSummary {
-                kind,
                 metadata,
                 path: relative,
             });

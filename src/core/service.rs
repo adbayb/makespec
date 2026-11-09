@@ -171,13 +171,13 @@ pub(crate) fn change_status(
 ) -> Result<Document> {
     if next_status != Status::Superseded && superseded_by.is_some() {
         return Err(MakespecError::Invalid(
-            "`--by` is only valid when setting status to `superseded`".into(),
+            "a replacement ID is only valid when setting status to `superseded`".into(),
         ));
     }
 
     if next_status == Status::Superseded && superseded_by.is_none() {
         return Err(MakespecError::Invalid(
-            "superseding a document requires `--by <ID>`".into(),
+            "superseding a document requires a replacement ID".into(),
         ));
     }
 

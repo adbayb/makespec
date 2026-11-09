@@ -28,8 +28,7 @@ fn main() -> Result<()> {
 
     run(Command::new(BINARY)
         .arg("init")
-        .arg(project.path())
-        .arg("--no-skills")
+        .current_dir(project.path())
         .stdout(Stdio::null()))?;
 
     for number in 2..=last {

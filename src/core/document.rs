@@ -147,7 +147,6 @@ pub struct Document {
 
 #[derive(Clone, Debug)]
 pub struct DocumentSummary {
-    pub kind: Kind,
     pub metadata: Metadata,
     pub path: String,
 }

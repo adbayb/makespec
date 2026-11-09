@@ -1,7 +1,4 @@
-use std::{
-    io::{self, IsTerminal, Read},
-    path::PathBuf,
-};
+use std::io::{self, IsTerminal, Read};
 
 use clap::{CommandFactory, Parser, Subcommand};
 
@@ -19,6 +16,7 @@ use crate::{
 #[command(
     name = "makespec",
     version,
+    disable_help_subcommand = true,
     about = "Manage ADRs and RFCs in your repository"
 )]
 struct Cli {
@@ -28,27 +26,16 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum CommandLine {
-    Init {
-        #[arg(default_value = ".")]
-        path: PathBuf,
-        #[arg(long)]
-        no_skills: bool,
-    },
+    Init,
     New {
         kind: Kind,
-        #[arg(long)]
         title: String,
     },
-    List {
-        kind: Option<Kind>,
-        #[arg(long)]
-        status: Option<Status>,
-    },
+    List,
     Status {
         id: String,
         status: Status,
-        #[arg(long)]
-        by: Option<String>,
+        replacement_id: Option<String>,
     },
     Check,
 }
@@ -62,16 +49,12 @@ pub fn run() -> Result<()> {
         return Ok(());
     };
 
-    match command {
-        CommandLine::Init { path, no_skills } => {
-            let store = FilesystemStore::new(&path)?;
-            let skills = if no_skills {
-                &[]
-            } else {
-                embedded::SKILL_FILES
-            };
+    let path = std::env::current_dir()?;
+    let store = FilesystemStore::new(&path)?;
 
-            service::initialize(&store, &today(), skills)?;
+    match command {
+        CommandLine::Init => {
+            service::initialize(&store, &today(), embedded::SKILL_FILES)?;
 
             println!(
                 "Initialized Makespec in {}",
@@ -87,19 +70,14 @@ pub fn run() -> Result<()> {
             }
 
             let body = read_stdin_bounded()?;
-            let store = FilesystemStore::new(&std::env::current_dir()?)?;
             let document = service::create(&store, kind, title, body, &today())?;
 
             println!("Created {} ({})", document.metadata.id, document.path);
         }
-        CommandLine::List { kind, status } => {
-            let store = FilesystemStore::new(&std::env::current_dir()?)?;
+        CommandLine::List => {
             let documents = service::list(&store)?;
 
-            for document in documents.into_iter().filter(|document| {
-                kind.is_none_or(|filter| document.kind == filter)
-                    && status.is_none_or(|filter| document.metadata.status == filter)
-            }) {
+            for document in documents {
                 println!(
                     "{}\t{}\t{}\t{}\t{}",
                     document.metadata.id,
@@ -110,14 +88,16 @@ pub fn run() -> Result<()> {
                 );
             }
         }
-        CommandLine::Status { id, status, by } => {
-            let store = FilesystemStore::new(&std::env::current_dir()?)?;
-            let document = service::change_status(&store, &id, status, by.as_deref())?;
+        CommandLine::Status {
+            id,
+            status,
+            replacement_id,
+        } => {
+            let document = service::change_status(&store, &id, status, replacement_id.as_deref())?;
 
             println!("{} is {}", document.metadata.id, document.metadata.status);
         }
         CommandLine::Check => {
-            let store = FilesystemStore::new(&std::env::current_dir()?)?;
             let errors = service::check(&store)?;
 
             if errors.is_empty() {

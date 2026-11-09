@@ -24,12 +24,12 @@ Allocate IDs under a project-wide advisory lock. Reconcile cached per-kind high-
 
 ## Initialization
 
-`init` creates the two document directories and accepted seeds using the initialization date:
+`init` operates in the current directory, creating the two document directories and accepted seeds using the initialization date:
 
 - `ADR-0001` records adoption of ADRs for decisions and RFCs for functionality.
 - `RFC-0001` specifies the RFC format with complete requirements, constraints, and alternative comparisons.
 
-Embed the canonical skill files at build time and install them under `.agents/skills/makespec/`, unless the user passes `--no-skills`. Install no scripts or agent configuration. Skill discovery depends on agent support, and users must put `makespec` on the agent's `PATH`.
+Embed the canonical skill files at build time and install them under `.agents/skills/makespec/`. Install no scripts or agent configuration. Skill discovery depends on agent support, and users must put `makespec` on the agent's `PATH`.
 
 Preflight managed destinations, stage files beside their destinations, and publish without overwriting existing files. Reinitialization preserves matching files and valid accepted seeds; conflicts fail with a path. If publication fails, remove only newly published files whose contents still match, reporting rollback failures. Initialization is not a multi-file transaction; rerunning it can complete a partial initialization. It does not initialize Git or commit files.
 

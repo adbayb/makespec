@@ -28,7 +28,7 @@ fn cli_initializes_creates_lists_changes_status_and_checks() {
     );
     assert!(String::from_utf8_lossy(&created.stdout).contains("ADR-0002"));
 
-    let listed = run(project.path(), &["list", "adr", "--status", "draft"]);
+    let listed = run(project.path(), &["list"]);
 
     assert!(listed.status.success());
     assert!(String::from_utf8_lossy(&listed.stdout).contains("Document a focused choice"));
@@ -54,14 +54,58 @@ fn cli_initializes_creates_lists_changes_status_and_checks() {
 }
 
 #[test]
-fn no_skills_skips_agent_skill_installation() {
-    let project = tempdir().unwrap();
-    let output = run(project.path(), &["init", "--no-skills"]);
+fn supersession_requires_a_positional_accepted_replacement() {
+    let project = initialized_project();
+    let created = create(project.path(), "adr", "Use a replacement", ADR_BODY);
 
-    assert!(output.status.success());
-    assert!(!project.path().join(".agents/skills/makespec").exists());
-    assert!(project.path().join("docs/adrs").is_dir());
-    assert!(project.path().join("docs/rfcs").is_dir());
+    assert!(created.status.success());
+
+    let missing = run(project.path(), &["status", "ADR-0001", "superseded"]);
+    let premature = run(
+        project.path(),
+        &["status", "ADR-0001", "superseded", "ADR-0002"],
+    );
+    let unexpected = run(
+        project.path(),
+        &["status", "ADR-0001", "deprecated", "ADR-0002"],
+    );
+
+    assert!(!missing.status.success());
+    assert!(String::from_utf8_lossy(&missing.stderr).contains("requires a replacement ID"));
+    assert!(!premature.status.success());
+    assert!(String::from_utf8_lossy(&premature.stderr).contains("must be accepted first"));
+    assert!(!unexpected.status.success());
+    assert!(String::from_utf8_lossy(&unexpected.stderr).contains("only valid"));
+
+    for next in ["proposed", "accepted"] {
+        assert!(
+            run(project.path(), &["status", "ADR-0002", next])
+                .status
+                .success()
+        );
+    }
+
+    let superseded = run(
+        project.path(),
+        &["status", "ADR-0001", "superseded", "ADR-0002"],
+    );
+
+    assert!(
+        superseded.status.success(),
+        "{}",
+        String::from_utf8_lossy(&superseded.stderr)
+    );
+    assert!(run(project.path(), &["check"]).status.success());
+
+    let original = std::fs::read_to_string(
+        project
+            .path()
+            .join("docs/adrs/0001-use-adrs-for-decisions-and-rfcs-for-changes.md"),
+    )
+    .unwrap();
+
+    assert!(original.contains("status: superseded\n"));
+    assert!(original.contains("superseded_by: ADR-0002\n"));
 }
 
 #[test]
@@ -185,7 +229,7 @@ fn terminal_output_escapes_controls_in_titles_and_errors() {
         "---\nid: ADR-0002\ntitle: \"Unsafe\\u001b[2J title\"\ndate: 2026-11-09\nstatus: draft\n---\n",
     ).unwrap();
 
-    let listed = run(project.path(), &["list", "adr"]);
+    let listed = run(project.path(), &["list"]);
     let missing = run(project.path(), &["status", "ADR-\u{1b}[2J", "accepted"]);
 
     assert!(listed.status.success());
@@ -201,7 +245,7 @@ fn terminal_output_escapes_controls_in_titles_and_errors() {
 
 fn initialized_project() -> TempDir {
     let project = tempdir().unwrap();
-    let initialized = makespec().arg("init").arg(project.path()).output().unwrap();
+    let initialized = run(project.path(), &["init"]);
 
     assert!(
         initialized.status.success(),
@@ -227,7 +271,7 @@ fn run(project: &Path, arguments: &[&str]) -> Output {
 fn create(project: &Path, kind: &str, title: &str, body: &str) -> Output {
     let mut command = makespec()
         .current_dir(project)
-        .args(["new", kind, "--title", title])
+        .args(["new", kind, title])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

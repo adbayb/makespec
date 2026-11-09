@@ -57,14 +57,14 @@ makespec init
 makespec check
 ```
 
-`init` creates `docs/adrs/`, `docs/rfcs/`, an accepted adoption ADR, an accepted format RFC, and `.agents/skills/makespec/`. Pass `--no-skills` to skip the skill, or provide a path with `makespec init path/to/project`.
+`init` creates `docs/adrs/`, `docs/rfcs/`, an accepted adoption ADR, an accepted format RFC, and `.agents/skills/makespec/` in the current directory. Run all commands from your project root.
 
 ### 3. Create and review a decision
 
 Pass a Markdown body to `new` on stdin, omitting front matter and the ID/title heading. New records start as drafts:
 
 ```sh
-makespec new adr --title "Keep pull requests focused" <<'EOF'
+makespec new adr "Keep pull requests focused" <<'EOF'
 ## Context
 
 Reviewers need changes they can evaluate in one pass.
@@ -79,7 +79,7 @@ Large features may need several pull requests.
 EOF
 
 makespec check
-makespec list adr --status draft
+makespec list
 makespec status ADR-0002 proposed
 makespec status ADR-0002 accepted
 ```
@@ -89,7 +89,7 @@ In a fresh project, `init` reserves `ADR-0001`, so this example creates `ADR-000
 On PowerShell, save the Markdown body above in `decision.md` and pipe it with:
 
 ```powershell
-Get-Content -Raw decision.md | makespec new adr --title "Keep pull requests focused"
+Get-Content -Raw decision.md | makespec new adr "Keep pull requests focused"
 ```
 
 For an RFC, use `new rfc` and follow the [RFC template](.agents/skills/makespec/references/rfc-template.md).
@@ -101,10 +101,10 @@ Edit records with your editor or agent tools, preserving IDs and dates, then run
 | Command | Purpose |
 | --- | --- |
 | `makespec`, `makespec --help`, or `makespec -h` | Print help. |
-| `makespec init [PATH] [--no-skills]` | Bootstrap a project. PATH defaults to the current directory. |
-| `makespec new adr --title "Title"` | Read an ADR body from stdin and create a draft. Use `rfc` for an RFC. |
-| `makespec list [adr\|rfc] [--status STATUS]` | List records and their statuses. |
-| `makespec status ID STATUS [--by ID]` | Promote a draft, return a proposal to draft, accept, reject, deprecate, or supersede a record. |
+| `makespec init` | Bootstrap records and the agent skill in the current directory. |
+| `makespec new <adr\|rfc> "Title"` | Read a Markdown body from stdin and create a draft. |
+| `makespec list` | List all records and their statuses. |
+| `makespec status ID STATUS [REPLACEMENT_ID]` | Promote a draft, return a proposal to draft, accept, reject, deprecate, or supersede a record. |
 | `makespec check` | Validate front matter, document structure, filenames, lifecycle links, and RFC comparison tables. |
 
 Use `makespec --help` or `makespec <command> --help` for command details.
