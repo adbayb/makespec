@@ -528,27 +528,27 @@ impl ProjectStore for FilesystemStore {
                 return Err(MakespecError::ConcurrentModification(path));
             }
 
-            fn stage_file(destination: &Path, content: &str) -> Result<NamedTempFile> {
-                let parent = destination
-                    .parent()
-                    .ok_or_else(|| MakespecError::Invalid("managed file has no parent".into()))?;
-                let mut temp = Builder::new()
-                    .prefix(STAGING_PREFIX)
-                    .suffix(STAGING_SUFFIX)
-                    .tempfile_in(parent)?;
-
-                temp.write_all(content.as_bytes())?;
-                temp.as_file().sync_all()?;
-
-                Ok(temp)
-            }
-
             temp.persist(&path)
                 .map_err(|error| MakespecError::Io(error.error))?;
 
             parse_document(&replacement.raw, replacement.path.clone())
         })
     }
+}
+
+fn stage_file(destination: &Path, content: &str) -> Result<NamedTempFile> {
+    let parent = destination
+        .parent()
+        .ok_or_else(|| MakespecError::Invalid("managed file has no parent".into()))?;
+    let mut temp = Builder::new()
+        .prefix(STAGING_PREFIX)
+        .suffix(STAGING_SUFFIX)
+        .tempfile_in(parent)?;
+
+    temp.write_all(content.as_bytes())?;
+    temp.as_file().sync_all()?;
+
+    Ok(temp)
 }
 
 fn cache_directory() -> Result<PathBuf> {

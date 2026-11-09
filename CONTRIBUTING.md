@@ -37,14 +37,13 @@ CI runs those checks on Linux, macOS, and Windows.
 
 ### How to measure performance?
 
-To measure catalog listing/check costs on a POSIX system with Python 3:
+To measure catalog listing/check costs on Linux or macOS:
 
 ```sh
-cargo build --release
-python3 benchmarks/catalog.py target/release/makespec 500
+cargo bench --bench catalog -- 500
 ```
 
-The script creates a temporary project and reports wall time and peak resident memory for `list` and `check`. Results depend on the machine and filesystem; use them to set release budgets rather than treating one run as a portability guarantee.
+Cargo builds the optimized CLI and Rust benchmark. The benchmark creates a temporary project and reports wall time and peak resident memory for `list` and `check`, measuring each command in an isolated worker. The count defaults to 500. Results depend on the machine and filesystem; use them to set release budgets rather than treating one run as a portability guarantee.
 
 One reference run on macOS ARM64 with 500 synthetic ADRs plus the two seed records measured `list` at 74 ms / 7.5 MiB peak RSS and `check` at 49 ms / 8.2 MiB. Provisional same-host budgets are 100 ms for `list` and `check` and 32 MiB peak RSS. Re-run the benchmark on release hardware before treating those budgets as portable.
 
