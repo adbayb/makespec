@@ -3,17 +3,15 @@ name = "makespec"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
-description = "A local-first CLI and TUI for architecture decisions and RFCs"
+description = "A local-first CLI for architecture decisions and RFCs"
 license = "MIT"
 
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 clap = { version = "4.5", features = ["derive"] }
-crossterm = "0.29"
 deunicode = "1.6"
 fs2 = "0.4"
 pulldown-cmark = "0.13"
-ratatui = { version = "0.30", default-features = false, features = ["crossterm"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml_ng = "0.10"
 sha2 = "0.10"

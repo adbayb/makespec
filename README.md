@@ -9,7 +9,7 @@
 
 - Record small, focused decisions with architecture decision records (ADRs) and specify functionality with proposals (RFCs).
 - Compare RFC alternatives against functional/non-functional requirements and constraints using qualitative labels and PASS/FAIL gates.
-- Browse records, create proposals, edit their contents, and change status in a keyboard-driven terminal UI.
+- Create proposals, list records, and change status through five CLI commands.
 - Keep dated, numbered records in `docs/adrs/` and `docs/rfcs/`, and check their structure with `makespec check`.
 - Give coding agents the bundled skill so they can create and manage records through the CLI.
 
@@ -59,25 +59,9 @@ makespec check
 
 `init` creates `docs/adrs/`, `docs/rfcs/`, an accepted adoption ADR, an accepted format RFC, and `.agents/skills/makespec/`. Pass `--no-skills` to skip the skill, or provide a path with `makespec init path/to/project`.
 
-Before creating or editing through the TUI, configure an installed editor through `VISUAL` or `EDITOR`. For example, with VS Code:
-
-```sh
-export EDITOR="code --wait"
-```
-
-In PowerShell, use `$env:EDITOR = "code --wait"`. Makespec gives `VISUAL` precedence over `EDITOR`. Quote executable paths or arguments that contain spaces; Makespec starts the editor without invoking a shell.
-
-Open the TUI:
-
-```sh
-makespec
-```
-
-Use Up/Down to navigate, `k` to filter by kind, `s` to filter by status, `n` to create, `e` to edit, `a` to accept, `r` to reject, Page Up/Down to scroll, and `q` to quit.
-
 ### 3. Create and review a decision
 
-You can use the CLI without an editor. Pass a complete Markdown body to `new` on stdin, omitting front matter and the ID/title heading:
+Pass a complete Markdown body to `new` on stdin, omitting front matter and the ID/title heading:
 
 ```sh
 makespec new adr --title "Keep pull requests focused" <<'EOF'
@@ -107,13 +91,13 @@ On PowerShell, save the Markdown body above in `decision.md` and pipe it with:
 Get-Content -Raw decision.md | makespec new adr --title "Keep pull requests focused"
 ```
 
-For an RFC, use `new rfc` and complete the [RFC template](.agents/skills/makespec/references/rfc-template.md). Run `makespec check` after creating or editing a document, fix reported issues, and rerun the check before changing its status.
+For an RFC, use `new rfc` and complete the [RFC template](.agents/skills/makespec/references/rfc-template.md). Edit proposed Markdown records with your editor or agent tools, preserving their IDs and dates. Run `makespec check` after creating or editing a document, fix reported issues, and rerun the check before changing its status.
 
 ### Commands
 
 | Command | Purpose |
 | --- | --- |
-| `makespec` | Open the TUI in a terminal; print help when stdin or stdout is not a terminal. |
+| `makespec`, `makespec --help`, or `makespec -h` | Print help. |
 | `makespec init [PATH] [--no-skills]` | Bootstrap a project. PATH defaults to the current directory. |
 | `makespec new adr --title "Title"` | Read a complete ADR body from stdin and create a proposed ADR. Use `rfc` for an RFC. |
 | `makespec list [adr\|rfc] [--status STATUS]` | List records and their statuses. |
@@ -135,7 +119,6 @@ The agent reads relevant accepted records, drafts an [ADR](.agents/skills/makesp
 ### Used technologies
 
 - Rust and Cargo for the binary and build.
-- Ratatui and Crossterm for the terminal UI.
 - Clap for command parsing.
 - YAML front matter and Markdown for records.
 
@@ -143,12 +126,11 @@ The agent reads relevant accepted records, drafts an [ADR](.agents/skills/makesp
 
 ## 🏗️ Architecture
 
-The CLI and TUI share core workflows and document rules through a hexagonal design. The filesystem adapter implements the storage port:
+The CLI calls core workflows and document rules through a hexagonal design. The filesystem adapter implements the storage port:
 
 ```mermaid
 flowchart LR
     CLI["CLI"] --> Workflows["Core workflows"]
-    TUI["TUI"] --> Workflows
     Workflows --> Rules["Document rules"]
     Workflows --> Port["ProjectStore port"]
     Filesystem["Filesystem adapter"] -. implements .-> Port
@@ -157,7 +139,7 @@ flowchart LR
 
 Each document kind has its own incrementing IDs. Records contain a date and use YAML front matter as the sole status source. You can review and version the files in Git.
 
-Makespec validates paths and metadata, limits document input to 2 MiB, uses exclusive creation, and checks for external edits before replacing files. It keeps ID allocation locks outside the repository. Advisory locks coordinate Makespec processes but cannot control external editors. If a TUI edit fails validation, Makespec saves the draft under `.makespec/recovery/`; add this directory to your Git ignore rules.
+Makespec validates paths and metadata, limits document input to 2 MiB, uses exclusive creation, and checks for external edits before replacing files. It keeps ID allocation locks outside the repository. Advisory locks coordinate Makespec processes but cannot control external editors.
 
 Read [`docs/spec.md`](docs/spec.md) for the product and implementation specification.
 

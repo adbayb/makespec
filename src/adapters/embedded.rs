@@ -1,11 +1,5 @@
 use std::collections::BTreeMap;
 
-pub const ADR_TEMPLATE: &str =
-    include_str!("../../.agents/skills/makespec/references/adr-template.md");
-
-pub const RFC_TEMPLATE: &str =
-    include_str!("../../.agents/skills/makespec/references/rfc-template.md");
-
 pub fn skill_files() -> BTreeMap<&'static str, &'static str> {
     BTreeMap::from([
         (

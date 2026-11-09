@@ -484,34 +484,6 @@ impl ProjectStore for FilesystemStore {
         parse_document(&content, summary.path)
     }
 
-    fn save_recovery(&self, id: &str, content: &str) -> Result<PathBuf> {
-        parse_id(id)?;
-
-        if content.len() as u64 > MAX_DOCUMENT_BYTES {
-            return Err(MakespecError::Invalid(format!(
-                "recovery document exceeds {MAX_DOCUMENT_BYTES} bytes"
-            )));
-        }
-
-        let destination = self.ensure_safe_parent(".makespec/recovery/draft.md", true)?;
-        let parent = destination
-            .parent()
-            .ok_or_else(|| MakespecError::Invalid("recovery path has no parent".into()))?;
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|error| MakespecError::Invalid(format!("system clock error: {error}")))?
-            .as_nanos();
-        let path = parent.join(format!("{id}-{stamp}.md"));
-        let mut temp = NamedTempFile::new_in(parent)?;
-
-        temp.write_all(content.as_bytes())?;
-        temp.as_file().sync_all()?;
-        temp.persist_noclobber(&path)
-            .map_err(|error| MakespecError::Io(error.error))?;
-
-        Ok(path.strip_prefix(&self.root).unwrap_or(&path).to_path_buf())
-    }
-
     fn create_proposed(&self, new_document: NewDocument) -> Result<Document> {
         if new_document.body.len() as u64 > MAX_DOCUMENT_BYTES {
             return Err(MakespecError::Invalid(format!(
@@ -870,17 +842,6 @@ mod tests {
     }
 
     #[test]
-    fn recovery_draft_is_written_to_ignored_project_location() {
-        let (directory, store) = initialized_store();
-        let path = service::save_recovery(&store, "ADR-0001", "unfinished draft").unwrap();
-
-        assert_eq!(
-            fs::read_to_string(directory.path().join(path)).unwrap(),
-            "unfinished draft"
-        );
-    }
-
-    #[test]
     fn catalog_lists_metadata_without_loading_large_bodies() {
         let (directory, store) = initialized_store();
         let path = directory.path().join("docs/adrs/0002-large-document.md");
@@ -892,7 +853,7 @@ mod tests {
         fs::write(path, content).unwrap();
 
         assert_eq!(service::list(&store).unwrap().len(), 3);
-        assert!(service::get(&store, "ADR-0002").is_err());
+        assert!(store.document("ADR-0002").is_err());
     }
 
     #[test]

@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
 
 use chrono::NaiveDate;
 
@@ -34,7 +33,6 @@ pub(crate) trait ProjectStore {
     fn documents(&self) -> Result<Vec<Document>>;
     fn catalog(&self) -> Result<Vec<DocumentSummary>>;
     fn document(&self, id: &str) -> Result<Document>;
-    fn save_recovery(&self, id: &str, content: &str) -> Result<PathBuf>;
     fn create_proposed(&self, new_document: NewDocument) -> Result<Document>;
     fn replace(&self, previous: &Document, replacement: &Document) -> Result<Document>;
 }
@@ -169,49 +167,8 @@ pub(crate) fn create(
     store.create_proposed(new_document)
 }
 
-pub(crate) fn edit(store: &impl ProjectStore, id: &str, content: &str) -> Result<Document> {
-    let current = store.document(id)?;
-
-    if current.metadata.status != Status::Proposed {
-        return Err(MakespecError::Invalid(format!(
-            "only proposed documents can be edited: {id}"
-        )));
-    }
-
-    let edited = parse_document(content, current.path.clone())?;
-    let old = &current.metadata;
-    let new = &edited.metadata;
-
-    if old.id != new.id
-        || old.date != new.date
-        || old.status != new.status
-        || old.superseded_by != new.superseded_by
-        || old.extra != new.extra
-    {
-        return Err(MakespecError::Invalid(format!(
-            "editing {id} must preserve ID, date, and lifecycle metadata; use `makespec status` for lifecycle changes"
-        )));
-    }
-
-    let errors = validate_structure(&edited);
-
-    if !errors.is_empty() {
-        return Err(structure_error(&format!("invalid edit to {id}"), &errors));
-    }
-
-    store.replace(&current, &edited)
-}
-
 pub(crate) fn list(store: &impl ProjectStore) -> Result<Vec<DocumentSummary>> {
     store.catalog()
-}
-
-pub(crate) fn get(store: &impl ProjectStore, id: &str) -> Result<Document> {
-    store.document(id)
-}
-
-pub(crate) fn save_recovery(store: &impl ProjectStore, id: &str, content: &str) -> Result<PathBuf> {
-    store.save_recovery(id, content)
 }
 
 pub(crate) fn change_status(

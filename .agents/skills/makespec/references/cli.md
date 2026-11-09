@@ -2,7 +2,7 @@
 
 Run commands from the project root.
 
-- `makespec`: open the TUI in a terminal.
+- `makespec`, `makespec --help`, or `makespec -h`: print help.
 - `makespec init [PATH] [--no-skills]`: initialize document folders, accepted seed records, and the skill.
 - `makespec new adr --title "Title"` or `makespec new rfc --title "Title"`: read the completed Markdown body from stdin and create a proposed record. The body must omit front matter and the ID/title heading. If stdin is a terminal, the command fails instead of waiting.
 - `makespec list [adr|rfc] [--status STATUS]`: list matching records.
