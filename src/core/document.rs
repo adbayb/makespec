@@ -61,6 +61,7 @@ impl std::fmt::Display for Kind {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Status {
+    Draft,
     Proposed,
     Accepted,
     Rejected,
@@ -69,7 +70,8 @@ pub enum Status {
 }
 
 impl Status {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
+        Self::Draft,
         Self::Proposed,
         Self::Accepted,
         Self::Rejected,
@@ -79,6 +81,7 @@ impl Status {
 
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::Draft => "draft",
             Self::Proposed => "proposed",
             Self::Accepted => "accepted",
             Self::Rejected => "rejected",
@@ -90,7 +93,11 @@ impl Status {
     pub fn can_transition_to(self, next: Self) -> bool {
         matches!(
             (self, next),
-            (Self::Proposed, Self::Accepted | Self::Rejected)
+            (Self::Draft, Self::Proposed | Self::Rejected)
+                | (
+                    Self::Proposed,
+                    Self::Draft | Self::Accepted | Self::Rejected
+                )
                 | (Self::Accepted, Self::Deprecated | Self::Superseded)
                 | (Self::Deprecated, Self::Superseded)
         )
@@ -106,7 +113,7 @@ impl std::str::FromStr for Status {
             .find(|status| status.as_str() == value.to_ascii_lowercase())
             .ok_or_else(|| {
                 MakespecError::Invalid(format!(
-                    "unknown status `{value}`; expected proposed, accepted, rejected, deprecated, or superseded"
+                    "unknown status `{value}`; expected draft, proposed, accepted, rejected, deprecated, or superseded"
                 ))
             })
     }
@@ -410,6 +417,27 @@ pub fn update_metadata(document: &Document, metadata: Metadata) -> Result<Docume
 }
 
 pub fn validate_structure(document: &Document) -> Vec<String> {
+    validate_document(document, false)
+}
+
+pub fn validate_acceptance(document: &Document) -> Vec<String> {
+    let mut errors = validate_document(document, true);
+
+    for (line_number, line) in document.body.lines().enumerate() {
+        let trimmed = line.trim();
+
+        if trimmed.contains("Replace with") || trimmed.starts_with("[TODO") {
+            errors.push(format!(
+                "unresolved template placeholder on body line {}",
+                line_number + 1
+            ));
+        }
+    }
+
+    errors
+}
+
+fn validate_document(document: &Document, complete: bool) -> Vec<String> {
     let Ok((kind, _, _)) = document.metadata.validate() else {
         return vec!["invalid document metadata".into()];
     };
@@ -438,67 +466,53 @@ pub fn validate_structure(document: &Document) -> Vec<String> {
         );
     }
 
-    let required: &[&str] = match kind {
+    let sections: &[&str] = match kind {
         Kind::Adr => &["Context", "Decision", "Consequences"],
         Kind::Rfc => &[
-            "Summary",
-            "Motivation",
-            "Requirements",
-            "Constraints",
-            "Detailed design",
-            "Drawbacks",
-            "Alternatives",
-            "Adoption strategy",
+            "Context",
+            "Requirements and constraints",
+            "Options",
+            "Design",
+            "Adoption",
+            "Open questions",
         ],
+    };
+    let required = match kind {
+        Kind::Rfc if complete => &sections[..5],
+        Kind::Rfc => &sections[..3],
+        Kind::Adr => sections,
     };
     let level_two: Vec<&str> = headings
         .iter()
         .filter_map(|(level, title)| (*level == 2).then_some(title.as_str()))
         .collect();
 
-    for section in required {
+    for section in sections {
         let count = level_two
             .iter()
             .filter(|heading| **heading == *section)
             .count();
 
-        if count == 0 {
+        if count == 0 && required.contains(section) {
             errors.push(format!("missing required `## {section}` section"));
         } else if count > 1 {
             errors.push(format!("duplicate `## {section}` sections"));
-        } else if section_text(&document.body, section).trim().is_empty() {
+        } else if count == 1 && section_text(&document.body, section).trim().is_empty() {
             errors.push(format!("`## {section}` must contain content"));
         }
     }
 
-    let required_order: Vec<usize> = required
+    let section_order: Vec<usize> = sections
         .iter()
         .filter_map(|name| level_two.iter().position(|heading| heading == name))
         .collect();
 
-    if required_order.windows(2).any(|pair| pair[0] >= pair[1]) {
+    if section_order.windows(2).any(|pair| pair[0] >= pair[1]) {
         errors.push("required sections are not in template order".into());
     }
 
     if kind == Kind::Rfc {
-        errors.extend(validate_rfc_tables(&document.body));
-    }
-
-    errors
-}
-
-pub fn validate_acceptance(document: &Document) -> Vec<String> {
-    let mut errors = validate_structure(document);
-
-    for (line_number, line) in document.body.lines().enumerate() {
-        let trimmed = line.trim();
-
-        if trimmed.contains("Replace with") || trimmed.starts_with("[TODO") {
-            errors.push(format!(
-                "unresolved template placeholder on body line {}",
-                line_number + 1
-            ));
-        }
+        errors.extend(validate_rfc_tables(&document.body, complete));
     }
 
     errors
@@ -547,59 +561,59 @@ enum Criterion {
     Constraint,
 }
 
-fn validate_rfc_tables(markdown: &str) -> Vec<String> {
-    let tables = collect_tables_by_section(markdown);
+fn validate_rfc_tables(markdown: &str, complete: bool) -> Vec<String> {
+    let criteria_text = section_text(markdown, "Requirements and constraints");
+    let headings = collect_headings(&criteria_text);
     let mut errors = Vec::new();
-    let requirements = tables.get("Requirements");
-    let constraints = tables.get("Constraints");
-    let alternatives = tables.get("Alternatives");
 
-    if requirements.is_none() {
-        errors.push("`## Requirements` must contain a Markdown table".into());
+    for section in ["Requirements", "Constraints"] {
+        let count = headings
+            .iter()
+            .filter(|(level, title)| *level == 3 && title == section)
+            .count();
+
+        if count == 0 && section == "Requirements" {
+            errors.push("missing required `### Requirements` subsection".into());
+        } else if count > 1 {
+            errors.push(format!("duplicate `### {section}` subsections"));
+        }
     }
 
-    if constraints.is_none() {
-        errors.push("`## Constraints` must contain a Markdown table".into());
-    }
-
-    if alternatives.is_none() {
-        errors.push("`## Alternatives` must contain the comparison table".into());
-    }
-
-    let (Some(requirements), Some(constraints), Some(alternatives)) =
-        (requirements, constraints, alternatives)
-    else {
-        return errors;
-    };
-
+    let requirements = collect_tables(&section_text(&criteria_text, "Requirements"));
     let requirement_rows = table_rows(
-        requirements,
+        &requirements,
         &["id", "priority", "requirement"],
         "Requirements",
         &mut errors,
     );
-    let constraint_rows = table_rows(
-        constraints,
-        &["id", "constraint"],
-        "Constraints",
-        &mut errors,
-    );
     let mut criteria = validate_requirements(requirement_rows, &mut errors);
-    validate_constraints(constraint_rows, &mut criteria, &mut errors);
 
-    if !criteria.keys().any(|id| id.starts_with("FR-"))
-        || !criteria.keys().any(|id| id.starts_with("NFR-"))
-        || !criteria.keys().any(|id| id.starts_with("C-"))
+    if headings
+        .iter()
+        .any(|(level, title)| *level == 3 && title == "Constraints")
     {
-        errors.push(
-            "RFC comparison requires functional, non-functional, and constraint criteria".into(),
+        let constraints = collect_tables(&section_text(&criteria_text, "Constraints"));
+        let constraint_rows = table_rows(
+            &constraints,
+            &["id", "constraint"],
+            "Constraints",
+            &mut errors,
         );
+
+        validate_constraints(constraint_rows, &mut criteria, &mut errors);
     }
 
+    if !criteria.keys().any(|id| id.starts_with("FR-")) {
+        errors.push("RFC comparison requires at least one functional requirement".into());
+    }
+
+    let options_text = section_text(markdown, "Options");
+
     validate_comparison(
-        alternatives,
+        &collect_tables(&options_text),
         &criteria,
-        &section_text(markdown, "Alternatives"),
+        &options_text,
+        complete,
         &mut errors,
     );
 
@@ -681,35 +695,41 @@ fn validate_constraints(
 }
 
 fn validate_comparison(
-    alternatives: &[Table],
+    tables: &[Table],
     criteria: &BTreeMap<String, Criterion>,
-    alternatives_text: &str,
+    options_text: &str,
+    complete: bool,
     errors: &mut Vec<String>,
 ) {
-    let chosen = alternatives_text
+    let choices: Vec<&str> = options_text
         .lines()
-        .find_map(|line| line.trim().strip_prefix("**Chosen option:**"))
+        .filter_map(|line| line.trim().strip_prefix("**Chosen option:**"))
         .map(str::trim)
-        .unwrap_or_default();
+        .collect();
+    let chosen = choices.first().copied().unwrap_or_default();
 
-    if alternatives.len() > 1 {
-        errors.push("`## Alternatives` must contain exactly one canonical table".into());
+    if choices.len() > 1 {
+        errors.push("`## Options` must name at most one chosen option".into());
     }
 
-    let Some(comparison_table) = alternatives.first() else {
-        errors.push("`## Alternatives` is missing its comparison table".into());
+    if tables.len() > 1 {
+        errors.push("`## Options` must contain exactly one canonical table".into());
+    }
+
+    let Some(comparison_table) = tables.first() else {
+        errors.push("`## Options` is missing its comparison table".into());
 
         return;
     };
     let Some(headers) = comparison_table.first() else {
-        errors.push("`## Alternatives` table is empty".into());
+        errors.push("`## Options` table is empty".into());
 
         return;
     };
 
-    if headers.len() < 2 || !headers[0].trim().eq_ignore_ascii_case("criterion id") {
+    if headers.len() < 3 || !headers[0].trim().eq_ignore_ascii_case("criterion id") {
         errors.push(
-            "comparison table must start with `Criterion ID` followed by option columns".into(),
+            "comparison table must start with `Criterion ID` followed by at least two option columns".into(),
         );
     }
 
@@ -730,15 +750,16 @@ fn validate_comparison(
         .iter()
         .any(|option| option.eq_ignore_ascii_case("do nothing"))
     {
-        errors.push("Alternatives must include a `Do nothing` option".into());
+        errors.push("Options must include a `Do nothing` option".into());
     }
 
-    if chosen.is_empty()
-        || !options
-            .iter()
-            .any(|option| option.eq_ignore_ascii_case(chosen))
+    if (complete && chosen.is_empty())
+        || (!chosen.is_empty()
+            && !options
+                .iter()
+                .any(|option| option.eq_ignore_ascii_case(chosen)))
     {
-        errors.push("`## Alternatives` must name a chosen option that appears in the table".into());
+        errors.push("`## Options` must name a chosen option that appears in the table".into());
     }
 
     let mut seen_criteria = std::collections::BTreeSet::new();
@@ -762,6 +783,10 @@ fn validate_comparison(
         }
 
         for (option, assessment) in options.iter().zip(row.iter().skip(1)) {
+            if !complete && assessment.trim().is_empty() {
+                continue;
+            }
+
             let Some((label, explanation)) = assessment.split_once(" - ") else {
                 errors.push(format!(
                     "comparison cell for `{criterion}` and `{option}` needs a label and explanation separated by ` - `"
@@ -788,7 +813,8 @@ fn validate_comparison(
                         ));
                     }
 
-                    if priority == "MUST"
+                    if complete
+                        && priority == "MUST"
                         && label != "fully meets"
                         && option.eq_ignore_ascii_case(chosen)
                     {
@@ -802,7 +828,7 @@ fn validate_comparison(
                         ));
                     }
 
-                    if label == "fail" && option.eq_ignore_ascii_case(chosen) {
+                    if complete && label == "fail" && option.eq_ignore_ascii_case(chosen) {
                         errors.push("chosen option fails a constraint".into());
                     }
                 }
@@ -811,7 +837,7 @@ fn validate_comparison(
     }
 
     for criterion in criteria.keys() {
-        if !seen_criteria.contains(criterion) {
+        if complete && !seen_criteria.contains(criterion) {
             errors.push(format!("comparison has no row for `{criterion}`"));
         }
     }
@@ -825,17 +851,17 @@ fn table_rows(
 ) -> Table {
     if tables.len() > 1 {
         errors.push(format!(
-            "`## {section}` must contain exactly one canonical table"
+            "`### {section}` must contain exactly one canonical table"
         ));
     }
 
     let Some(table) = tables.first() else {
-        errors.push(format!("`## {section}` is missing its table"));
+        errors.push(format!("`### {section}` is missing its table"));
 
         return Vec::new();
     };
     let Some(headers) = table.first() else {
-        errors.push(format!("`## {section}` table is empty"));
+        errors.push(format!("`### {section}` table is empty"));
 
         return Vec::new();
     };
@@ -848,7 +874,7 @@ fn table_rows(
     for required in required_headers {
         if !normalized.iter().any(|header| header == required) {
             errors.push(format!(
-                "`## {section}` table is missing `{required}` column"
+                "`### {section}` table is missing `{required}` column"
             ));
         }
     }
@@ -860,7 +886,7 @@ fn table_rows(
             .eq(required_headers.iter().copied())
     {
         errors.push(format!(
-            "`## {section}` table columns are not in canonical order"
+            "`### {section}` table columns are not in canonical order"
         ));
     }
 
@@ -868,53 +894,57 @@ fn table_rows(
 }
 
 fn section_text(markdown: &str, section: &str) -> String {
-    let mut current = String::new();
-    let mut inside = false;
+    let mut heading = None;
+    let mut selected = None;
+    let mut start = None;
 
-    for line in markdown.lines() {
-        if let Some(heading) = line.strip_prefix("## ") {
-            if inside {
-                break;
+    for (event, range) in Parser::new_ext(markdown, Options::ENABLE_TABLES).into_offset_iter() {
+        match event {
+            Event::Start(Tag::Heading { level, .. }) => {
+                if let (Some(selected_level), Some(start)) = (selected, start)
+                    && level <= selected_level
+                {
+                    return markdown[start..range.start].to_string();
+                }
+
+                heading = Some((level, String::new()));
             }
-
-            inside = heading.trim() == section;
-            continue;
-        }
-
-        if inside {
-            current.push_str(line);
-            current.push('\n');
+            Event::Text(text) | Event::Code(text) => {
+                if let Some((_, title)) = heading.as_mut() {
+                    title.push_str(&text);
+                }
+            }
+            Event::End(TagEnd::Heading(_)) => {
+                if let Some((level, title)) = heading.take()
+                    && selected.is_none()
+                    && title == section
+                {
+                    selected = Some(level);
+                    start = Some(range.end);
+                }
+            }
+            _ => {}
         }
     }
 
-    current
+    start.map_or_else(String::new, |start| markdown[start..].to_string())
 }
 
-fn collect_tables_by_section(markdown: &str) -> BTreeMap<String, Vec<Table>> {
+fn collect_tables(markdown: &str) -> Vec<Table> {
     let parser = Parser::new_ext(markdown, Options::ENABLE_TABLES);
-    let mut current_section = String::new();
-    let mut heading: Option<String> = None;
-    let mut tables = BTreeMap::<String, Vec<Table>>::new();
+    let mut tables = Vec::new();
     let mut table: Option<Table> = None;
     let mut row: Option<Vec<String>> = None;
     let mut cell: Option<String> = None;
 
     for event in parser {
         match event {
-            Event::Start(Tag::Heading {
-                level: pulldown_cmark::HeadingLevel::H2,
-                ..
-            }) => heading = Some(String::new()),
             Event::Start(Tag::Table(_)) => table = Some(Vec::new()),
             Event::Start(Tag::TableHead | Tag::TableRow) => row = Some(Vec::new()),
             Event::Start(Tag::TableCell) => cell = Some(String::new()),
             Event::Text(text) | Event::Code(text) => {
                 if let Some(cell) = cell.as_mut() {
                     cell.push_str(&text);
-                }
-
-                if let Some(heading) = heading.as_mut() {
-                    heading.push_str(&text);
                 }
             }
             Event::End(TagEnd::TableCell) => {
@@ -929,15 +959,7 @@ fn collect_tables_by_section(markdown: &str) -> BTreeMap<String, Vec<Table>> {
             }
             Event::End(TagEnd::Table) => {
                 if let Some(table) = table.take() {
-                    tables
-                        .entry(current_section.clone())
-                        .or_default()
-                        .push(table);
-                }
-            }
-            Event::End(TagEnd::Heading(pulldown_cmark::HeadingLevel::H2)) => {
-                if let Some(heading) = heading.take() {
-                    current_section = heading;
+                    tables.push(table);
                 }
             }
             _ => {}
@@ -960,9 +982,23 @@ mod tests {
 
     #[test]
     fn status_transitions_follow_the_lifecycle() {
+        assert!(Status::Draft.can_transition_to(Status::Proposed));
+        assert!(Status::Draft.can_transition_to(Status::Rejected));
+        assert!(!Status::Draft.can_transition_to(Status::Accepted));
+        assert!(Status::Proposed.can_transition_to(Status::Draft));
         assert!(Status::Proposed.can_transition_to(Status::Accepted));
         assert!(Status::Accepted.can_transition_to(Status::Superseded));
         assert!(!Status::Rejected.can_transition_to(Status::Accepted));
+    }
+
+    #[test]
+    fn section_extraction_respects_nested_headings_and_code_examples() {
+        let markdown = "## Context\n\nExample:\n\n```md\n## Options\n```\n\nStill context.\n\n## Requirements and constraints\n\n### Requirements\n\nBehavior.\n\n### Constraints\n\nLimits.\n\n## Options\n\nChoices.";
+
+        assert!(section_text(markdown, "Context").contains("Still context."));
+        assert_eq!(section_text(markdown, "Requirements").trim(), "Behavior.");
+        assert_eq!(section_text(markdown, "Constraints").trim(), "Limits.");
+        assert_eq!(section_text(markdown, "Options").trim(), "Choices.");
     }
 
     #[test]

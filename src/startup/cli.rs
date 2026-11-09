@@ -82,7 +82,7 @@ pub fn run() -> Result<()> {
         CommandLine::New { kind, title } => {
             if io::stdin().is_terminal() {
                 return Err(MakespecError::Invalid(
-                    "new reads a Markdown body from stdin; pipe the completed body into the command"
+                    "new reads a Markdown body from stdin; pipe a Markdown body into the command"
                         .into(),
                 ));
             }

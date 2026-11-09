@@ -484,7 +484,7 @@ impl ProjectStore for FilesystemStore {
         parse_document(&content, summary.path)
     }
 
-    fn create_proposed(&self, new_document: NewDocument) -> Result<Document> {
+    fn create_draft(&self, new_document: NewDocument) -> Result<Document> {
         if new_document.body.len() as u64 > MAX_DOCUMENT_BYTES {
             return Err(MakespecError::Invalid(format!(
                 "document body exceeds {MAX_DOCUMENT_BYTES} bytes"
@@ -526,7 +526,7 @@ impl ProjectStore for FilesystemStore {
                 id,
                 title: new_document.title,
                 date: new_document.date,
-                status: Status::Proposed,
+                status: Status::Draft,
                 superseded_by: None,
                 extra: Default::default(),
             };
@@ -802,6 +802,8 @@ mod tests {
             "2026-11-09",
         )
         .unwrap();
+        service::change_status(&store, &created.metadata.id, Status::Proposed, None).unwrap();
+
         let accepted =
             service::change_status(&store, &created.metadata.id, Status::Accepted, None).unwrap();
 
@@ -824,6 +826,7 @@ mod tests {
         )
         .unwrap();
 
+        service::change_status(&store, &replacement.metadata.id, Status::Proposed, None).unwrap();
         service::change_status(&store, &replacement.metadata.id, Status::Accepted, None).unwrap();
 
         let superseded = service::change_status(

@@ -8,7 +8,7 @@
 ## ✨ Features
 
 - Record small, focused decisions with architecture decision records (ADRs) and specify functionality with proposals (RFCs).
-- Compare RFC alternatives against functional/non-functional requirements and constraints using qualitative labels and PASS/FAIL gates.
+- Compare RFC alternatives against functional requirements (FR), non-functional requirements (NFR), and constraints using qualitative labels and PASS/FAIL gates.
 - Create proposals, list records, and change status through five CLI commands.
 - Keep dated, numbered records in `docs/adrs/` and `docs/rfcs/`, and check their structure with `makespec check`.
 - Give coding agents the bundled skill so they can create and manage records through the CLI.
@@ -61,7 +61,7 @@ makespec check
 
 ### 3. Create and review a decision
 
-Pass a complete Markdown body to `new` on stdin, omitting front matter and the ID/title heading:
+Pass a Markdown body to `new` on stdin, omitting front matter and the ID/title heading. New records start as drafts:
 
 ```sh
 makespec new adr --title "Keep pull requests focused" <<'EOF'
@@ -79,7 +79,8 @@ Large features may need several pull requests.
 EOF
 
 makespec check
-makespec list adr --status proposed
+makespec list adr --status draft
+makespec status ADR-0002 proposed
 makespec status ADR-0002 accepted
 ```
 
@@ -91,7 +92,9 @@ On PowerShell, save the Markdown body above in `decision.md` and pipe it with:
 Get-Content -Raw decision.md | makespec new adr --title "Keep pull requests focused"
 ```
 
-For an RFC, use `new rfc` and complete the [RFC template](.agents/skills/makespec/references/rfc-template.md). Edit proposed Markdown records with your editor or agent tools, preserving their IDs and dates. Run `makespec check` after creating or editing a document, fix reported issues, and rerun the check before changing its status.
+For an RFC, use `new rfc` and follow the [RFC template](.agents/skills/makespec/references/rfc-template.md): Context, Requirements and constraints, Options, Design, and Adoption. Drafts may leave comparison cells and the chosen option blank and omit Design and Adoption. Include non-functional requirements and constraints only when relevant.
+
+Edit Markdown records with your editor or agent tools, preserving their IDs and dates. Run `makespec check` after edits. Promotion to `proposed` requires complete content; RFCs also require an eligible chosen option. Acceptance follows review. Return a proposed record to `draft` for rework, or reject a draft or proposal. Accepted records may become deprecated or superseded.
 
 ### Commands
 
@@ -99,9 +102,9 @@ For an RFC, use `new rfc` and complete the [RFC template](.agents/skills/makespe
 | --- | --- |
 | `makespec`, `makespec --help`, or `makespec -h` | Print help. |
 | `makespec init [PATH] [--no-skills]` | Bootstrap a project. PATH defaults to the current directory. |
-| `makespec new adr --title "Title"` | Read a complete ADR body from stdin and create a proposed ADR. Use `rfc` for an RFC. |
+| `makespec new adr --title "Title"` | Read an ADR body from stdin and create a draft. Use `rfc` for an RFC. |
 | `makespec list [adr\|rfc] [--status STATUS]` | List records and their statuses. |
-| `makespec status ID STATUS [--by ID]` | Accept, reject, deprecate, or supersede a record. |
+| `makespec status ID STATUS [--by ID]` | Promote a draft, return a proposal to draft, accept, reject, deprecate, or supersede a record. |
 | `makespec check` | Validate front matter, document structure, filenames, lifecycle links, and RFC comparison tables. |
 
 Use `makespec --help` or `makespec <command> --help` for command details.
@@ -114,7 +117,7 @@ Use `makespec --help` or `makespec <command> --help` for command details.
 
 `makespec init` installs the [Makespec skill](.agents/skills/makespec/SKILL.md) and its references under `.agents/skills/makespec/`. Use an agent that discovers this directory, and put the binary on that agent's `PATH`.
 
-The agent reads relevant accepted records, drafts an [ADR](.agents/skills/makespec/references/adr-template.md) or [RFC](.agents/skills/makespec/references/rfc-template.md), then calls the CLI to create and check the proposal. The [planning guide](.agents/skills/makespec/references/planning.md) describes the approval boundaries. The CLI does not call an LLM or execute instructions from document contents.
+Once you authorize creation, the agent reads relevant accepted records, prepares a complete [ADR](.agents/skills/makespec/references/adr-template.md) or [RFC](.agents/skills/makespec/references/rfc-template.md), and uses the CLI to create, check, and promote it to `proposed`. The agent keeps a draft when you request one or when information, decisions, or evidence are missing, and reports the gaps. Acceptance requires your approval. The [planning guide](.agents/skills/makespec/references/planning.md) describes these boundaries. The CLI does not call an LLM or execute instructions from document contents.
 
 ### Used technologies
 

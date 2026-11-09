@@ -1,56 +1,57 @@
-## Summary
+## Context
 
-Summarize the proposed functionality and intended outcome.
+Replace with a short proposal summary, the current problem, and the intended outcome. Define scope and relevant non-goals, citing related ADRs or RFCs.
 
-## Basic example
+## Requirements and constraints
 
-Replace with a representative usage or interaction, or remove this optional section when no example applies.
+### Requirements
 
-## Motivation
-
-Describe the user need, use cases, and constraints without assuming the solution.
-
-## Requirements
-
-Use unique IDs and priority.
+Write one testable requirement per row, with unique `FR-001`-style IDs for functional requirements. Include `NFR-001`-style IDs for non-functional requirements, such as measurable latency or reliability targets, only when relevant. Assign `MUST` (required), `SHOULD` (recommended), or `MAY` (optional) priority.
 
 | ID | Priority | Requirement |
 | --- | --- | --- |
-| FR-001 | MUST | Replace with one functional requirement |
-| NFR-001 | SHOULD | Replace with one non-functional requirement |
+| FR-001 | MUST | Replace with a functional requirement |
+| NFR-001 | SHOULD | Replace with a measurable non-functional requirement |
 
-## Constraints
+### Constraints
 
-List hard constraints that an option must satisfy. Use IDs.
+Keep this subsection only for genuine hard boundaries, such as a required platform or budget limit. Use unique `C-001`-style IDs. Constraints are pass/fail gates, separate from functional and non-functional requirements.
 
 | ID | Constraint |
 | --- | --- |
-| C-001 | Replace with one hard constraint |
+| C-001 | Replace with a hard constraint |
 
-## Detailed design
+## Options
 
-Describe behavior, interfaces, edge cases, and enough detail to implement the proposal.
+Describe each candidate, including `Do nothing` (the current behavior). Name options in the column headers and compare them against the same criteria. Include one row for each requirement and constraint ID; remove rows for criteria you omit above.
 
-## Drawbacks
+Leave unassessed cells blank while the RFC is a draft. Before promoting it to proposed, fill each cell with `LABEL - explanation` and supporting evidence:
 
-Describe material costs and risks of the proposal.
+- Requirements: `Does not meet`, `Partially meets`, or `Fully meets`.
+- Constraints: `PASS` or `FAIL`.
 
-## Alternatives
-
-Compare every option, including “Do nothing,” against every requirement and constraint. Put criteria in rows and options in columns. In requirement cells, begin with exactly `Does not meet`, `Partially meets`, or `Fully meets`, followed by ` - ` and a brief evidence-based explanation. In constraint cells, begin with `PASS` or `FAIL`, followed by ` - ` and a brief explanation. A chosen option must fully meet every MUST requirement and pass every constraint.
-
-| Criterion ID | Do nothing | Replace with an option |
+| Criterion ID | Do nothing | Proposed approach |
 | --- | --- | --- |
-| FR-001 | Does not meet - Explain the gap | Fully meets - Cite evidence |
-| NFR-001 | Partially meets - Explain the gap | Fully meets - Cite evidence |
-| C-001 | PASS - Explain why it satisfies the constraint | PASS - Explain why it satisfies the constraint |
+| FR-001 | | |
+| NFR-001 | | |
+| C-001 | | |
 
-State the chosen eligible option and why. Explain the decision using the requirement priorities, constraint results, and supporting evidence; do not reduce the choice to an aggregate score.
+**Chosen option:**
 
-## Adoption strategy
+Leave the choice blank while it is under discussion. Before promotion to proposed, name an option from the table that fully meets every MUST requirement and passes every constraint. Explain the choice and its tradeoffs using criterion IDs. Do not calculate an aggregate score.
 
-Describe rollout, compatibility, migration, and any required coordination.
+## Design
 
-## Unresolved questions
+Replace with the chosen option's behavior and interfaces, including failure cases, in enough detail to implement it. Include examples beside the behavior they illustrate. Drafts may omit this section until an option is chosen.
 
-Replace with open questions that do not prevent review, or remove this optional section when none remain.
+### Risks and mitigations
+
+Describe material risks and how to address them. Remove this optional subsection when no significant risks need explanation.
+
+## Adoption
+
+Replace with rollout, compatibility, and verification steps. Include migration or rollback when relevant to the functionality. Drafts may omit this section.
+
+## Open questions
+
+List remaining questions and how to resolve them. Resolve questions that prevent a supported choice or implementable design before promotion to proposed. Remove this optional section when no questions remain.
