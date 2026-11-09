@@ -8,13 +8,12 @@ use clap::{CommandFactory, Parser, Subcommand};
 use crate::{
     adapters::{embedded, filesystem::FilesystemStore},
     core::{
-        document::{Kind, Status, today},
+        document::{Kind, MAX_DOCUMENT_BYTES, Status, today},
         error::{MakespecError, Result},
         service,
     },
+    sanitize_terminal_text,
 };
-
-const MAX_STDIN_BYTES: u64 = crate::core::document::MAX_DOCUMENT_BYTES;
 
 #[derive(Parser)]
 #[command(
@@ -67,12 +66,12 @@ pub fn run() -> Result<()> {
         CommandLine::Init { path, no_skills } => {
             let store = FilesystemStore::new(&path)?;
             let skills = if no_skills {
-                Vec::new()
+                &[]
             } else {
-                embedded::skill_files().into_iter().collect::<Vec<_>>()
+                embedded::SKILL_FILES
             };
 
-            service::initialize(&store, &today(), &skills)?;
+            service::initialize(&store, &today(), skills)?;
 
             println!(
                 "Initialized Makespec in {}",
@@ -106,7 +105,7 @@ pub fn run() -> Result<()> {
                     document.metadata.id,
                     document.metadata.status,
                     document.metadata.date,
-                    document.metadata.title,
+                    sanitize_terminal_text(&document.metadata.title),
                     sanitize_terminal_text(&document.path)
                 );
             }
@@ -142,27 +141,15 @@ pub fn run() -> Result<()> {
 fn read_stdin_bounded() -> Result<String> {
     let mut bytes = Vec::new();
     io::stdin()
-        .take(MAX_STDIN_BYTES + 1)
+        .take(MAX_DOCUMENT_BYTES + 1)
         .read_to_end(&mut bytes)?;
 
-    if bytes.len() as u64 > MAX_STDIN_BYTES {
+    if bytes.len() as u64 > MAX_DOCUMENT_BYTES {
         return Err(MakespecError::Invalid(format!(
-            "stdin body exceeds {MAX_STDIN_BYTES} bytes"
+            "stdin body exceeds {MAX_DOCUMENT_BYTES} bytes"
         )));
     }
 
     String::from_utf8(bytes)
         .map_err(|_| MakespecError::Invalid("stdin body must be valid UTF-8".into()))
-}
-
-fn sanitize_terminal_text(text: &str) -> String {
-    text.chars()
-        .map(|character| {
-            if character.is_control() && character != '\n' {
-                '\u{fffd}'
-            } else {
-                character
-            }
-        })
-        .collect()
 }

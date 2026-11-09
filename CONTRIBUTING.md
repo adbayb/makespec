@@ -18,7 +18,7 @@ Read the [product specification](docs/spec.md) and [contributor instructions](AG
 
 ## 🗂️ Conventions
 
-- Follow the Rust formatting and spacing rules in [AGENTS.md](AGENTS.md). Use `cargo fmt` to format code.
+- Follow the Rust formatting and spacing rules in [AGENTS.md](AGENTS.md).
 - Preserve the hexagonal boundaries: keep document rules and workflows in `src/core/`, filesystem operations in `src/adapters/`, and CLI interaction in `src/startup/`.
 - Preserve bounded reads, path validation, and protection against concurrent edits.
 - Keep documentation and bundled agent instructions consistent with changes to commands or document formats.

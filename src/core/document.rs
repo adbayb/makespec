@@ -1,7 +1,7 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Range};
 
 use chrono::{Local, NaiveDate};
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::Value;
 
@@ -110,7 +110,7 @@ impl std::str::FromStr for Status {
     fn from_str(value: &str) -> Result<Self> {
         Self::ALL
             .into_iter()
-            .find(|status| status.as_str() == value.to_ascii_lowercase())
+            .find(|status| status.as_str().eq_ignore_ascii_case(value))
             .ok_or_else(|| {
                 MakespecError::Invalid(format!(
                     "unknown status `{value}`; expected draft, proposed, accepted, rejected, deprecated, or superseded"
@@ -159,6 +159,33 @@ pub struct NewDocument {
     pub slug: String,
     pub date: String,
     pub body: String,
+}
+
+impl NewDocument {
+    pub fn build(&self, number: u32, status: Status) -> Result<Document> {
+        let metadata = Metadata {
+            id: format!("{}-{number:04}", self.kind.id_prefix()),
+            title: self.title.clone(),
+            date: self.date.clone(),
+            status,
+            superseded_by: None,
+            extra: BTreeMap::new(),
+        };
+        let path = format!(
+            "docs/{}/{number:04}-{}.md",
+            self.kind.directory(),
+            self.slug
+        );
+        let raw = render_document(&metadata, &self.body)?;
+
+        if raw.len() as u64 > MAX_DOCUMENT_BYTES {
+            return Err(MakespecError::Invalid(format!(
+                "complete document exceeds {MAX_DOCUMENT_BYTES} bytes"
+            )));
+        }
+
+        parse_document(&raw, path)
+    }
 }
 
 impl Metadata {
@@ -332,16 +359,7 @@ fn escape_markdown_text(text: &str) -> String {
 
 pub fn parse_document(content: &str, path: String) -> Result<Document> {
     let normalized = content.replace("\r\n", "\n");
-    let rest = normalized.strip_prefix("---\n").ok_or_else(|| {
-        MakespecError::Invalid(format!(
-            "{path}: missing YAML front matter opening delimiter"
-        ))
-    })?;
-    let (yaml, body) = rest.split_once("\n---\n").ok_or_else(|| {
-        MakespecError::Invalid(format!(
-            "{path}: missing YAML front matter closing delimiter"
-        ))
-    })?;
+    let (yaml, body) = split_frontmatter(&normalized, &path)?;
     let metadata = parse_metadata(yaml, &path)?;
 
     Ok(Document {
@@ -354,18 +372,22 @@ pub fn parse_document(content: &str, path: String) -> Result<Document> {
 
 pub fn parse_metadata_prefix(content: &str, path: &str) -> Result<Metadata> {
     let normalized = content.replace("\r\n", "\n");
-    let rest = normalized.strip_prefix("---\n").ok_or_else(|| {
+    let (yaml, _) = split_frontmatter(&normalized, path)?;
+
+    parse_metadata(yaml, path)
+}
+
+fn split_frontmatter<'a>(content: &'a str, path: &str) -> Result<(&'a str, &'a str)> {
+    let rest = content.strip_prefix("---\n").ok_or_else(|| {
         MakespecError::Invalid(format!(
             "{path}: missing YAML front matter opening delimiter"
         ))
     })?;
-    let (yaml, _) = rest.split_once("\n---\n").ok_or_else(|| {
+    rest.split_once("\n---\n").ok_or_else(|| {
         MakespecError::Invalid(format!(
-            "{path}: missing or oversized YAML front matter (limit: 64 KiB)"
+            "{path}: missing YAML front matter closing delimiter"
         ))
-    })?;
-
-    parse_metadata(yaml, path)
+    })
 }
 
 fn parse_metadata(yaml: &str, path: &str) -> Result<Metadata> {
@@ -416,50 +438,34 @@ pub fn update_metadata(document: &Document, metadata: Metadata) -> Result<Docume
     parse_document(&raw, document.path.clone())
 }
 
-pub fn validate_structure(document: &Document) -> Vec<String> {
-    validate_document(document, false)
-}
-
-pub fn validate_acceptance(document: &Document) -> Vec<String> {
-    let mut errors = validate_document(document, true);
-
-    for (line_number, line) in document.body.lines().enumerate() {
-        let trimmed = line.trim();
-
-        if trimmed.contains("Replace with") || trimmed.starts_with("[TODO") {
-            errors.push(format!(
-                "unresolved template placeholder on body line {}",
-                line_number + 1
-            ));
-        }
-    }
-
-    errors
-}
-
-fn validate_document(document: &Document, complete: bool) -> Vec<String> {
+pub fn validate_document(document: &Document) -> Vec<String> {
     let Ok((kind, _, _)) = document.metadata.validate() else {
         return vec!["invalid document metadata".into()];
     };
 
+    let complete = !matches!(document.metadata.status, Status::Draft | Status::Rejected);
     let headings = collect_headings(&document.body);
     let mut errors = Vec::new();
     let expected_title = format!("{}: {}", document.metadata.id, document.metadata.title);
 
     if !headings
         .first()
-        .is_some_and(|(level, title)| *level == 1 && title == &expected_title)
+        .is_some_and(|heading| heading.level == HeadingLevel::H1 && heading.title == expected_title)
     {
         errors.push("first heading must match `# <ID>: <Title>` metadata".into());
     }
 
-    if headings.iter().skip(1).any(|(level, _)| *level == 1) {
+    if headings
+        .iter()
+        .skip(1)
+        .any(|heading| heading.level == HeadingLevel::H1)
+    {
         errors.push("document must contain only one level-one title heading".into());
     }
 
     if headings
         .iter()
-        .any(|(level, heading)| *level == 2 && heading == "Status")
+        .any(|heading| heading.level == HeadingLevel::H2 && heading.title == "Status")
     {
         errors.push(
             "status belongs only in YAML front matter; remove the `## Status` heading".into(),
@@ -484,7 +490,7 @@ fn validate_document(document: &Document, complete: bool) -> Vec<String> {
     };
     let level_two: Vec<&str> = headings
         .iter()
-        .filter_map(|(level, title)| (*level == 2).then_some(title.as_str()))
+        .filter_map(|heading| (heading.level == HeadingLevel::H2).then_some(heading.title.as_str()))
         .collect();
 
     for section in sections {
@@ -497,7 +503,11 @@ fn validate_document(document: &Document, complete: bool) -> Vec<String> {
             errors.push(format!("missing required `## {section}` section"));
         } else if count > 1 {
             errors.push(format!("duplicate `## {section}` sections"));
-        } else if count == 1 && section_text(&document.body, section).trim().is_empty() {
+        } else if count == 1
+            && section_text(&document.body, &headings, section)
+                .trim()
+                .is_empty()
+        {
             errors.push(format!("`## {section}` must contain content"));
         }
     }
@@ -512,38 +522,52 @@ fn validate_document(document: &Document, complete: bool) -> Vec<String> {
     }
 
     if kind == Kind::Rfc {
-        errors.extend(validate_rfc_tables(&document.body, complete));
+        errors.extend(validate_rfc_tables(&document.body, &headings, complete));
+    }
+
+    if complete {
+        for (line_number, line) in document.body.lines().enumerate() {
+            let trimmed = line.trim();
+
+            if trimmed.contains("Replace with") || trimmed.starts_with("[TODO") {
+                errors.push(format!(
+                    "unresolved template placeholder on body line {}",
+                    line_number + 1
+                ));
+            }
+        }
     }
 
     errors
 }
 
-fn collect_headings(markdown: &str) -> Vec<(u8, String)> {
-    let parser = Parser::new_ext(markdown, Options::ENABLE_TABLES);
-    let mut headings = Vec::new();
-    let mut current: Option<(u8, String)> = None;
+struct Heading {
+    level: HeadingLevel,
+    title: String,
+    range: Range<usize>,
+}
 
-    for event in parser {
+fn collect_headings(markdown: &str) -> Vec<Heading> {
+    let mut headings = Vec::new();
+    let mut current: Option<Heading> = None;
+
+    for (event, range) in Parser::new_ext(markdown, Options::ENABLE_TABLES).into_offset_iter() {
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
-                let level = match level {
-                    pulldown_cmark::HeadingLevel::H1 => 1,
-                    pulldown_cmark::HeadingLevel::H2 => 2,
-                    pulldown_cmark::HeadingLevel::H3 => 3,
-                    pulldown_cmark::HeadingLevel::H4 => 4,
-                    pulldown_cmark::HeadingLevel::H5 => 5,
-                    pulldown_cmark::HeadingLevel::H6 => 6,
-                };
-
-                current = Some((level, String::new()));
+                current = Some(Heading {
+                    level,
+                    title: String::new(),
+                    range,
+                });
             }
             Event::Text(text) | Event::Code(text) => {
-                if let Some((_, heading)) = current.as_mut() {
-                    heading.push_str(&text);
+                if let Some(heading) = current.as_mut() {
+                    heading.title.push_str(&text);
                 }
             }
             Event::End(TagEnd::Heading(_)) => {
-                if let Some(heading) = current.take() {
+                if let Some(mut heading) = current.take() {
+                    heading.range.end = range.end;
                     headings.push(heading);
                 }
             }
@@ -561,15 +585,15 @@ enum Criterion {
     Constraint,
 }
 
-fn validate_rfc_tables(markdown: &str, complete: bool) -> Vec<String> {
-    let criteria_text = section_text(markdown, "Requirements and constraints");
-    let headings = collect_headings(&criteria_text);
+fn validate_rfc_tables(markdown: &str, headings: &[Heading], complete: bool) -> Vec<String> {
+    let criteria_text = section_text(markdown, headings, "Requirements and constraints");
+    let criteria_headings = collect_headings(criteria_text);
     let mut errors = Vec::new();
 
     for section in ["Requirements", "Constraints"] {
-        let count = headings
+        let count = criteria_headings
             .iter()
-            .filter(|(level, title)| *level == 3 && title == section)
+            .filter(|heading| heading.level == HeadingLevel::H3 && heading.title == section)
             .count();
 
         if count == 0 && section == "Requirements" {
@@ -579,7 +603,11 @@ fn validate_rfc_tables(markdown: &str, complete: bool) -> Vec<String> {
         }
     }
 
-    let requirements = collect_tables(&section_text(&criteria_text, "Requirements"));
+    let requirements = collect_tables(section_text(
+        criteria_text,
+        &criteria_headings,
+        "Requirements",
+    ));
     let requirement_rows = table_rows(
         &requirements,
         &["id", "priority", "requirement"],
@@ -588,11 +616,15 @@ fn validate_rfc_tables(markdown: &str, complete: bool) -> Vec<String> {
     );
     let mut criteria = validate_requirements(requirement_rows, &mut errors);
 
-    if headings
+    if criteria_headings
         .iter()
-        .any(|(level, title)| *level == 3 && title == "Constraints")
+        .any(|heading| heading.level == HeadingLevel::H3 && heading.title == "Constraints")
     {
-        let constraints = collect_tables(&section_text(&criteria_text, "Constraints"));
+        let constraints = collect_tables(section_text(
+            criteria_text,
+            &criteria_headings,
+            "Constraints",
+        ));
         let constraint_rows = table_rows(
             &constraints,
             &["id", "constraint"],
@@ -607,12 +639,12 @@ fn validate_rfc_tables(markdown: &str, complete: bool) -> Vec<String> {
         errors.push("RFC comparison requires at least one functional requirement".into());
     }
 
-    let options_text = section_text(markdown, "Options");
+    let options_text = section_text(markdown, headings, "Options");
 
     validate_comparison(
-        &collect_tables(&options_text),
+        &collect_tables(options_text),
         &criteria,
-        &options_text,
+        options_text,
         complete,
         &mut errors,
     );
@@ -620,7 +652,10 @@ fn validate_rfc_tables(markdown: &str, complete: bool) -> Vec<String> {
     errors
 }
 
-fn validate_requirements(rows: Table, errors: &mut Vec<String>) -> BTreeMap<String, Criterion> {
+fn validate_requirements(
+    rows: &[Vec<String>],
+    errors: &mut Vec<String>,
+) -> BTreeMap<String, Criterion> {
     let mut criteria = BTreeMap::new();
 
     for row in rows {
@@ -664,7 +699,7 @@ fn validate_requirements(rows: Table, errors: &mut Vec<String>) -> BTreeMap<Stri
 }
 
 fn validate_constraints(
-    rows: Table,
+    rows: &[Vec<String>],
     criteria: &mut BTreeMap<String, Criterion>,
     errors: &mut Vec<String>,
 ) {
@@ -843,12 +878,12 @@ fn validate_comparison(
     }
 }
 
-fn table_rows(
-    tables: &[Table],
+fn table_rows<'a>(
+    tables: &'a [Table],
     required_headers: &[&str],
     section: &str,
     errors: &mut Vec<String>,
-) -> Table {
+) -> &'a [Vec<String>] {
     if tables.len() > 1 {
         errors.push(format!(
             "`### {section}` must contain exactly one canonical table"
@@ -858,12 +893,12 @@ fn table_rows(
     let Some(table) = tables.first() else {
         errors.push(format!("`### {section}` is missing its table"));
 
-        return Vec::new();
+        return &[];
     };
     let Some(headers) = table.first() else {
         errors.push(format!("`### {section}` table is empty"));
 
-        return Vec::new();
+        return &[];
     };
 
     let normalized: Vec<String> = headers
@@ -890,57 +925,31 @@ fn table_rows(
         ));
     }
 
-    table.iter().skip(1).cloned().collect()
+    &table[1..]
 }
 
-fn section_text(markdown: &str, section: &str) -> String {
-    let mut heading = None;
-    let mut selected = None;
-    let mut start = None;
+fn section_text<'a>(markdown: &'a str, headings: &[Heading], section: &str) -> &'a str {
+    let Some(index) = headings.iter().position(|heading| heading.title == section) else {
+        return "";
+    };
+    let selected = &headings[index];
+    let end = headings[index + 1..]
+        .iter()
+        .find(|heading| heading.level <= selected.level)
+        .map_or(markdown.len(), |heading| heading.range.start);
 
-    for (event, range) in Parser::new_ext(markdown, Options::ENABLE_TABLES).into_offset_iter() {
-        match event {
-            Event::Start(Tag::Heading { level, .. }) => {
-                if let (Some(selected_level), Some(start)) = (selected, start)
-                    && level <= selected_level
-                {
-                    return markdown[start..range.start].to_string();
-                }
-
-                heading = Some((level, String::new()));
-            }
-            Event::Text(text) | Event::Code(text) => {
-                if let Some((_, title)) = heading.as_mut() {
-                    title.push_str(&text);
-                }
-            }
-            Event::End(TagEnd::Heading(_)) => {
-                if let Some((level, title)) = heading.take()
-                    && selected.is_none()
-                    && title == section
-                {
-                    selected = Some(level);
-                    start = Some(range.end);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    start.map_or_else(String::new, |start| markdown[start..].to_string())
+    &markdown[selected.range.end..end]
 }
 
 fn collect_tables(markdown: &str) -> Vec<Table> {
     let parser = Parser::new_ext(markdown, Options::ENABLE_TABLES);
     let mut tables = Vec::new();
-    let mut table: Option<Table> = None;
-    let mut row: Option<Vec<String>> = None;
+    let mut table = Vec::new();
+    let mut row = Vec::new();
     let mut cell: Option<String> = None;
 
     for event in parser {
         match event {
-            Event::Start(Tag::Table(_)) => table = Some(Vec::new()),
-            Event::Start(Tag::TableHead | Tag::TableRow) => row = Some(Vec::new()),
             Event::Start(Tag::TableCell) => cell = Some(String::new()),
             Event::Text(text) | Event::Code(text) => {
                 if let Some(cell) = cell.as_mut() {
@@ -948,19 +957,15 @@ fn collect_tables(markdown: &str) -> Vec<Table> {
                 }
             }
             Event::End(TagEnd::TableCell) => {
-                if let (Some(row), Some(cell)) = (row.as_mut(), cell.take()) {
+                if let Some(cell) = cell.take() {
                     row.push(cell.trim().to_string());
                 }
             }
             Event::End(TagEnd::TableHead | TagEnd::TableRow) => {
-                if let (Some(table), Some(row)) = (table.as_mut(), row.take()) {
-                    table.push(row);
-                }
+                table.push(std::mem::take(&mut row));
             }
             Event::End(TagEnd::Table) => {
-                if let Some(table) = table.take() {
-                    tables.push(table);
-                }
+                tables.push(std::mem::take(&mut table));
             }
             _ => {}
         }
@@ -988,17 +993,28 @@ mod tests {
         assert!(Status::Proposed.can_transition_to(Status::Draft));
         assert!(Status::Proposed.can_transition_to(Status::Accepted));
         assert!(Status::Accepted.can_transition_to(Status::Superseded));
+        assert!(!Status::Accepted.can_transition_to(Status::Rejected));
         assert!(!Status::Rejected.can_transition_to(Status::Accepted));
     }
 
     #[test]
     fn section_extraction_respects_nested_headings_and_code_examples() {
         let markdown = "## Context\n\nExample:\n\n```md\n## Options\n```\n\nStill context.\n\n## Requirements and constraints\n\n### Requirements\n\nBehavior.\n\n### Constraints\n\nLimits.\n\n## Options\n\nChoices.";
+        let headings = collect_headings(markdown);
 
-        assert!(section_text(markdown, "Context").contains("Still context."));
-        assert_eq!(section_text(markdown, "Requirements").trim(), "Behavior.");
-        assert_eq!(section_text(markdown, "Constraints").trim(), "Limits.");
-        assert_eq!(section_text(markdown, "Options").trim(), "Choices.");
+        assert!(section_text(markdown, &headings, "Context").contains("Still context."));
+        assert_eq!(
+            section_text(markdown, &headings, "Requirements").trim(),
+            "Behavior."
+        );
+        assert_eq!(
+            section_text(markdown, &headings, "Constraints").trim(),
+            "Limits."
+        );
+        assert_eq!(
+            section_text(markdown, &headings, "Options").trim(),
+            "Choices."
+        );
     }
 
     #[test]
@@ -1039,7 +1055,7 @@ mod tests {
             raw: String::new(),
         };
 
-        assert!(validate_structure(&doc).is_empty());
+        assert!(validate_document(&doc).is_empty());
 
         let mut with_status = doc.clone();
         with_status.body = with_status
@@ -1047,7 +1063,7 @@ mod tests {
             .replace("## Context", "## Status\n\nproposed\n\n## Context");
 
         assert!(
-            validate_structure(&with_status)
+            validate_document(&with_status)
                 .iter()
                 .any(|error| error.contains("status belongs only"))
         );
@@ -1056,23 +1072,38 @@ mod tests {
     #[test]
     fn rendered_heading_preserves_markdown_special_characters_in_title() {
         let title = "Choose [links](safely) and `code`";
-        let metadata = Metadata {
-            id: "ADR-0001".into(),
+        let document = NewDocument {
+            kind: Kind::Adr,
             title: title.into(),
+            slug: slugify(title).unwrap(),
             date: "2026-11-09".into(),
-            status: Status::Proposed,
-            superseded_by: None,
-            extra: BTreeMap::new(),
-        };
-
-        let raw = render_document(
-            &metadata,
-            "## Context\n\nIssue.\n\n## Decision\n\nChoice.\n\n## Consequences\n\nTrade-off.",
-        )
+            body: "## Context\n\nIssue.\n\n## Decision\n\nChoice.\n\n## Consequences\n\nTrade-off."
+                .into(),
+        }
+        .build(1, Status::Proposed)
         .unwrap();
-        let document = parse_document(&raw, "docs/adrs/0001-title.md".into()).unwrap();
 
-        assert!(validate_structure(&document).is_empty());
+        assert!(validate_document(&document).is_empty());
+    }
+
+    #[test]
+    fn document_size_limit_includes_metadata_and_expanding_identifiers() {
+        let mut document = NewDocument {
+            kind: Kind::Adr,
+            title: "Bounded record".into(),
+            slug: "bounded-record".into(),
+            date: "2026-11-09".into(),
+            body: String::new(),
+        };
+        let overhead = document.build(9999, Status::Draft).unwrap().raw.len();
+
+        document.body = "x".repeat(MAX_DOCUMENT_BYTES as usize - overhead);
+
+        assert_eq!(
+            document.build(9999, Status::Draft).unwrap().raw.len(),
+            MAX_DOCUMENT_BYTES as usize
+        );
+        assert!(document.build(10_000, Status::Draft).is_err());
     }
 
     #[test]

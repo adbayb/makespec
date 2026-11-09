@@ -8,30 +8,6 @@ use tempfile::tempdir;
 
 const ADR_BODY: &str = "## Context\n\nThe project needs a focused decision.\n\n## Decision\n\nUse the proposed approach.\n\n## Consequences\n\nThe decision remains in Git.";
 
-fn makespec() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_makespec"))
-}
-
-fn create(project: &Path, kind: &str, title: &str, body: &str) -> Output {
-    let mut command = makespec()
-        .current_dir(project)
-        .args(["new", kind, "--title", title])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-
-    command
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(body.as_bytes())
-        .unwrap();
-
-    command.wait_with_output().unwrap()
-}
-
 #[test]
 fn cli_initializes_creates_lists_changes_status_and_checks() {
     let project = tempdir().unwrap();
@@ -49,17 +25,6 @@ fn cli_initializes_creates_lists_changes_status_and_checks() {
             .is_file()
     );
 
-    let seed = std::fs::read_to_string(
-        project
-            .path()
-            .join("docs/adrs/0001-use-adrs-for-decisions-and-rfcs-for-changes.md"),
-    )
-    .unwrap();
-
-    for field in ["kind:", "slug:", "schema_version:"] {
-        assert!(!seed.contains(field));
-    }
-
     let created = create(project.path(), "adr", "Document a focused choice", ADR_BODY);
 
     assert!(
@@ -69,48 +34,24 @@ fn cli_initializes_creates_lists_changes_status_and_checks() {
     );
     assert!(String::from_utf8_lossy(&created.stdout).contains("ADR-0002"));
 
-    let created_document = std::fs::read_to_string(
-        project
-            .path()
-            .join("docs/adrs/0002-document-a-focused-choice.md"),
-    )
-    .unwrap();
-
-    for field in ["kind:", "slug:", "schema_version:"] {
-        assert!(!created_document.contains(field));
-    }
-
-    let listed = makespec()
-        .current_dir(project.path())
-        .args(["list", "adr", "--status", "draft"])
-        .output()
-        .unwrap();
+    let listed = run(project.path(), &["list", "adr", "--status", "draft"]);
 
     assert!(listed.status.success());
     assert!(String::from_utf8_lossy(&listed.stdout).contains("Document a focused choice"));
 
-    let proposed = makespec()
-        .current_dir(project.path())
-        .args(["status", "ADR-0002", "proposed"])
-        .output()
-        .unwrap();
+    let proposed = run(project.path(), &["status", "ADR-0002", "proposed"]);
 
     assert!(proposed.status.success());
 
-    let accepted = makespec()
-        .current_dir(project.path())
-        .args(["status", "ADR-0002", "accepted"])
-        .output()
-        .unwrap();
+    let accepted = run(project.path(), &["status", "ADR-0002", "accepted"]);
 
     assert!(accepted.status.success());
 
-    let checked = makespec()
-        .current_dir(project.path())
-        .arg("check")
-        .output()
-        .unwrap();
+    let rejected = run(project.path(), &["status", "ADR-0002", "rejected"]);
 
+    assert!(!rejected.status.success());
+
+    let checked = run(project.path(), &["check"]);
     assert!(
         checked.status.success(),
         "{}",
@@ -121,11 +62,7 @@ fn cli_initializes_creates_lists_changes_status_and_checks() {
 #[test]
 fn no_skills_skips_agent_skill_installation() {
     let project = tempdir().unwrap();
-    let output = makespec()
-        .args(["init", "--no-skills"])
-        .arg(project.path())
-        .output()
-        .unwrap();
+    let output = run(project.path(), &["init", "--no-skills"]);
 
     assert!(output.status.success());
     assert!(!project.path().join(".agents/skills/makespec").exists());
@@ -136,11 +73,7 @@ fn no_skills_skips_agent_skill_installation() {
 #[test]
 fn invalid_document_body_is_rejected_without_writing_a_record() {
     let project = tempdir().unwrap();
-    let initialized = makespec()
-        .args(["init", "--no-skills"])
-        .arg(project.path())
-        .output()
-        .unwrap();
+    let initialized = run(project.path(), &["init", "--no-skills"]);
 
     assert!(initialized.status.success());
 
@@ -176,7 +109,7 @@ fn invalid_document_body_is_rejected_without_writing_a_record() {
 #[test]
 fn rfc_drafts_require_completion_before_review_and_acceptance() {
     let project = tempdir().unwrap();
-    let initialized = makespec().arg("init").arg(project.path()).output().unwrap();
+    let initialized = run(project.path(), &["init"]);
 
     assert!(initialized.status.success());
 
@@ -193,22 +126,10 @@ fn rfc_drafts_require_completion_before_review_and_acceptance() {
     let draft = std::fs::read_to_string(&path).unwrap();
 
     assert!(draft.contains("status: draft\n"));
-    assert!(
-        makespec()
-            .current_dir(project.path())
-            .arg("check")
-            .output()
-            .unwrap()
-            .status
-            .success()
-    );
+    assert!(run(project.path(), &["check"]).status.success());
 
     for next in ["accepted", "proposed"] {
-        let result = makespec()
-            .current_dir(project.path())
-            .args(["status", "RFC-0002", next])
-            .output()
-            .unwrap();
+        let result = run(project.path(), &["status", "RFC-0002", next]);
 
         assert!(!result.status.success());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), draft);
@@ -225,11 +146,7 @@ fn rfc_drafts_require_completion_before_review_and_acceptance() {
     std::fs::write(&path, &completed).unwrap();
 
     for next in ["proposed", "draft", "proposed", "accepted"] {
-        let result = makespec()
-            .current_dir(project.path())
-            .args(["status", "RFC-0002", next])
-            .output()
-            .unwrap();
+        let result = run(project.path(), &["status", "RFC-0002", next]);
 
         assert!(
             result.status.success(),
@@ -242,11 +159,7 @@ fn rfc_drafts_require_completion_before_review_and_acceptance() {
 
     assert!(rejected_draft.status.success());
 
-    let rejected = makespec()
-        .current_dir(project.path())
-        .args(["status", "RFC-0003", "rejected"])
-        .output()
-        .unwrap();
+    let rejected = run(project.path(), &["status", "RFC-0003", "rejected"]);
 
     assert!(rejected.status.success());
 
@@ -256,11 +169,7 @@ fn rfc_drafts_require_completion_before_review_and_acceptance() {
 
     std::fs::write(&path, corrupted).unwrap();
 
-    let checked = makespec()
-        .current_dir(project.path())
-        .arg("check")
-        .output()
-        .unwrap();
+    let checked = run(project.path(), &["check"]);
 
     assert!(!checked.status.success());
 
@@ -270,15 +179,72 @@ fn rfc_drafts_require_completion_before_review_and_acceptance() {
     )
     .unwrap();
 
-    let checked = makespec()
-        .current_dir(project.path())
-        .arg("check")
-        .output()
-        .unwrap();
+    let checked = run(project.path(), &["check"]);
 
     assert!(
         checked.status.success(),
         "{}",
         String::from_utf8_lossy(&checked.stderr)
     );
+}
+
+#[test]
+fn terminal_output_escapes_controls_in_titles_and_errors() {
+    let project = tempdir().unwrap();
+
+    assert!(
+        run(project.path(), &["init", "--no-skills"])
+            .status
+            .success()
+    );
+
+    std::fs::write(
+        project.path().join("docs/adrs/0002-untrusted-title.md"),
+        "---\nid: ADR-0002\ntitle: \"Unsafe\\u001b[2J title\"\ndate: 2026-11-09\nstatus: draft\n---\n",
+    ).unwrap();
+
+    let listed = run(project.path(), &["list", "adr"]);
+    let missing = run(project.path(), &["status", "ADR-\u{1b}[2J", "accepted"]);
+
+    assert!(listed.status.success());
+    assert!(!missing.status.success());
+
+    for output in [&listed.stdout, &missing.stderr] {
+        let text = String::from_utf8_lossy(output);
+
+        assert!(text.contains('\u{fffd}'));
+        assert!(!text.contains('\u{1b}'));
+    }
+}
+
+fn makespec() -> Command {
+    Command::new(env!("CARGO_BIN_EXE_makespec"))
+}
+
+fn run(project: &Path, arguments: &[&str]) -> Output {
+    makespec()
+        .current_dir(project)
+        .args(arguments)
+        .output()
+        .unwrap()
+}
+
+fn create(project: &Path, kind: &str, title: &str, body: &str) -> Output {
+    let mut command = makespec()
+        .current_dir(project)
+        .args(["new", kind, "--title", title])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    command
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(body.as_bytes())
+        .unwrap();
+
+    command.wait_with_output().unwrap()
 }

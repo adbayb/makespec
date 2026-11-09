@@ -92,9 +92,9 @@ On PowerShell, save the Markdown body above in `decision.md` and pipe it with:
 Get-Content -Raw decision.md | makespec new adr --title "Keep pull requests focused"
 ```
 
-For an RFC, use `new rfc` and follow the [RFC template](.agents/skills/makespec/references/rfc-template.md): Context, Requirements and constraints, Options, Design, and Adoption. Drafts may leave comparison cells and the chosen option blank and omit Design and Adoption. Include non-functional requirements and constraints only when relevant.
+For an RFC, use `new rfc` and follow the [RFC template](.agents/skills/makespec/references/rfc-template.md).
 
-Edit Markdown records with your editor or agent tools, preserving their IDs and dates. Run `makespec check` after edits. Promotion to `proposed` requires complete content; RFCs also require an eligible chosen option. Acceptance follows review. Return a proposed record to `draft` for rework, or reject a draft or proposal. Accepted records may become deprecated or superseded.
+Edit records with your editor or agent tools, preserving IDs and dates, then run `makespec check`. See the [command reference](.agents/skills/makespec/references/cli.md) for lifecycle and completion rules.
 
 ### Commands
 
@@ -117,7 +117,7 @@ Use `makespec --help` or `makespec <command> --help` for command details.
 
 `makespec init` installs the [Makespec skill](.agents/skills/makespec/SKILL.md) and its references under `.agents/skills/makespec/`. Use an agent that discovers this directory, and put the binary on that agent's `PATH`.
 
-Once you authorize creation, the agent reads relevant accepted records, prepares a complete [ADR](.agents/skills/makespec/references/adr-template.md) or [RFC](.agents/skills/makespec/references/rfc-template.md), and uses the CLI to create, check, and promote it to `proposed`. The agent keeps a draft when you request one or when information, decisions, or evidence are missing, and reports the gaps. Acceptance requires your approval. The [planning guide](.agents/skills/makespec/references/planning.md) describes these boundaries. The CLI does not call an LLM or execute instructions from document contents.
+The skill guides agents from authorized creation to checked, `proposed` records, keeping drafts for unfinished work. Read its [workflow](.agents/skills/makespec/SKILL.md#workflow) for planning and approval boundaries. Acceptance requires your approval.
 
 ### Used technologies
 

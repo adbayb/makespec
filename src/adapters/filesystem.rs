@@ -6,12 +6,12 @@ use std::{
 
 use fs2::FileExt;
 use sha2::{Digest, Sha256};
-use tempfile::NamedTempFile;
+use tempfile::{Builder, NamedTempFile};
 
 use crate::core::{
     document::{
-        Document, DocumentSummary, Kind, MAX_DOCUMENT_BYTES, Metadata, NewDocument, Status,
-        parse_document, parse_id, parse_metadata_prefix, render_document, validate_acceptance,
+        Document, DocumentSummary, Kind, MAX_DOCUMENT_BYTES, NewDocument, Status, parse_document,
+        parse_id, parse_metadata_prefix, validate_document,
     },
     error::{MakespecError, Result},
     service::{ProjectFile, ProjectStore},
@@ -19,14 +19,11 @@ use crate::core::{
 
 const MAX_STATE_BYTES: u64 = 1024;
 const MAX_FRONTMATTER_BYTES: u64 = 64 * 1024;
+const STAGING_PREFIX: &str = ".makespec-";
+const STAGING_SUFFIX: &str = ".tmp";
 
 pub(crate) struct FilesystemStore {
     root: PathBuf,
-}
-
-struct LockFiles {
-    _lock: File,
-    state_path: PathBuf,
 }
 
 #[derive(Default)]
@@ -50,7 +47,7 @@ impl FilesystemStore {
         Ok(Self { root })
     }
 
-    fn with_lock<T>(&self, action: impl FnOnce(&LockFiles) -> Result<T>) -> Result<T> {
+    fn with_lock<T>(&self, action: impl FnOnce(&Path) -> Result<T>) -> Result<T> {
         let (lock_path, state_path) = self.lock_paths()?;
 
         if fs::symlink_metadata(&lock_path).is_ok_and(|metadata| metadata.file_type().is_symlink())
@@ -70,10 +67,7 @@ impl FilesystemStore {
 
         lock.lock_exclusive()?;
 
-        let result = action(&LockFiles {
-            _lock: lock.try_clone()?,
-            state_path,
-        });
+        let result = action(&state_path);
         let unlock_result = FileExt::unlock(&lock);
 
         match (result, unlock_result) {
@@ -178,6 +172,12 @@ impl FilesystemStore {
                     )));
                 }
 
+                if entry.file_name().to_str().is_some_and(|name| {
+                    name.starts_with(STAGING_PREFIX) && name.ends_with(STAGING_SUFFIX)
+                }) {
+                    continue;
+                }
+
                 if path.extension().and_then(|extension| extension.to_str()) != Some("md") {
                     return Err(MakespecError::Invalid(format!(
                         "unexpected file in document directory: {}",
@@ -252,24 +252,12 @@ impl FilesystemStore {
     }
 
     fn read_counters(&self, state_path: &Path) -> Result<Counters> {
-        let content = match fs::symlink_metadata(state_path) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+        let content = match read_bounded(state_path, MAX_STATE_BYTES) {
+            Ok(content) => content,
+            Err(MakespecError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
                 return Ok(Counters::default());
             }
-            Err(error) => return Err(error.into()),
-            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
-                return Err(MakespecError::Invalid(format!(
-                    "unsafe counter state file {}",
-                    state_path.display()
-                )));
-            }
-            Ok(metadata) if metadata.len() > MAX_STATE_BYTES => {
-                return Err(MakespecError::Invalid(format!(
-                    "counter state file is too large: {}",
-                    state_path.display()
-                )));
-            }
-            Ok(_) => fs::read_to_string(state_path)?,
+            Err(error) => return Err(error),
         };
 
         let mut counters = Counters::default();
@@ -310,13 +298,9 @@ impl FilesystemStore {
     }
 
     fn write_counters(&self, state_path: &Path, counters: &Counters) -> Result<()> {
-        let parent = state_path
-            .parent()
-            .ok_or_else(|| MakespecError::Invalid("counter state has no parent".into()))?;
-        let mut temp = NamedTempFile::new_in(parent)?;
+        let content = format!("adr={}\nrfc={}\n", counters.adr, counters.rfc);
+        let temp = stage_file(state_path, &content)?;
 
-        write!(temp, "adr={}\nrfc={}\n", counters.adr, counters.rfc)?;
-        temp.as_file().sync_all()?;
         temp.persist(state_path)
             .map_err(|error| MakespecError::Io(error.error))?;
 
@@ -343,7 +327,7 @@ impl FilesystemStore {
 
 impl ProjectStore for FilesystemStore {
     fn initialize(&self, files: &[ProjectFile]) -> Result<()> {
-        self.with_lock(|lock| {
+        self.with_lock(|state_path| {
             let mut seen = std::collections::BTreeSet::new();
             let mut pending = Vec::new();
 
@@ -357,57 +341,51 @@ impl ProjectStore for FilesystemStore {
 
                 let destination = self.ensure_safe_parent(&file.relative_path, false)?;
 
-                if let Ok(metadata) = fs::symlink_metadata(&destination) {
-                    if metadata.file_type().is_symlink() || !metadata.is_file() {
+                match fs::symlink_metadata(&destination) {
+                    Ok(metadata) => {
+                        if metadata.file_type().is_symlink() || !metadata.is_file() {
+                            return Err(MakespecError::Invalid(format!(
+                                "unsafe initialization destination {}",
+                                destination.display()
+                            )));
+                        }
+
+                        let existing = read_bounded(&destination, MAX_DOCUMENT_BYTES)?;
+
+                        if existing == file.content {
+                            continue;
+                        }
+
+                        if let Some(seed) = &file.seed {
+                            let parsed = parse_document(&existing, file.relative_path.clone())?;
+
+                            if parsed.metadata.id == seed.id
+                                && parsed.metadata.title == seed.title
+                                && parsed.metadata.status == Status::Accepted
+                                && validate_document(&parsed).is_empty()
+                            {
+                                continue;
+                            }
+                        }
+
                         return Err(MakespecError::Invalid(format!(
-                            "unsafe initialization destination {}",
+                            "initialization conflict at {}",
                             destination.display()
                         )));
                     }
-
-                    let existing = read_bounded(&destination, MAX_DOCUMENT_BYTES)?;
-
-                    if existing == file.content {
-                        continue;
-                    }
-
-                    if let Some(seed) = &file.seed {
-                        let relative = file.relative_path.clone();
-                        let parsed = parse_document(&existing, relative)?;
-
-                        if parsed.metadata.id == seed.id
-                            && parsed.metadata.title == seed.title
-                            && parsed.metadata.status == Status::Accepted
-                            && validate_acceptance(&parsed).is_empty()
-                        {
-                            continue;
-                        }
-                    }
-
-                    return Err(MakespecError::Invalid(format!(
-                        "initialization conflict at {}",
-                        destination.display()
-                    )));
-                } else if let Err(error) = fs::symlink_metadata(&destination)
-                    && error.kind() != std::io::ErrorKind::NotFound
-                {
-                    return Err(error.into());
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error.into()),
                 }
 
-                pending.push((file, destination));
+                pending.push(file);
             }
 
             let mut staged = Vec::new();
 
-            for (file, _destination) in pending {
+            for file in pending {
                 let destination = self.ensure_safe_parent(&file.relative_path, true)?;
-                let parent = destination
-                    .parent()
-                    .ok_or_else(|| MakespecError::Invalid("destination has no parent".into()))?;
-                let mut temp = NamedTempFile::new_in(parent)?;
+                let temp = stage_file(&destination, &file.content)?;
 
-                temp.write_all(file.content.as_bytes())?;
-                temp.as_file().sync_all()?;
                 staged.push((temp, destination, file.content.as_str()));
             }
 
@@ -435,7 +413,7 @@ impl ProjectStore for FilesystemStore {
 
             let documents = self.documents_in(false)?;
 
-            self.raise_counters(&lock.state_path, &documents)
+            self.raise_counters(state_path, &documents)
         })
     }
 
@@ -485,15 +463,9 @@ impl ProjectStore for FilesystemStore {
     }
 
     fn create_draft(&self, new_document: NewDocument) -> Result<Document> {
-        if new_document.body.len() as u64 > MAX_DOCUMENT_BYTES {
-            return Err(MakespecError::Invalid(format!(
-                "document body exceeds {MAX_DOCUMENT_BYTES} bytes"
-            )));
-        }
-
-        self.with_lock(|lock| {
+        self.with_lock(|state_path| {
             let documents = self.catalog()?;
-            let mut counters = self.read_counters(&lock.state_path)?;
+            let mut counters = self.read_counters(state_path)?;
             let max_number = documents
                 .iter()
                 .filter_map(|document| {
@@ -514,57 +486,21 @@ impl ProjectStore for FilesystemStore {
             })?;
 
             *current = number;
-            self.write_counters(&lock.state_path, &counters)?;
+            self.write_counters(state_path, &counters)?;
 
-            let id = format!("{}-{number:04}", new_document.kind.id_prefix());
-            let path = format!(
-                "docs/{}/{number:04}-{}.md",
-                new_document.kind.directory(),
-                new_document.slug
-            );
-            let metadata = Metadata {
-                id,
-                title: new_document.title,
-                date: new_document.date,
-                status: Status::Draft,
-                superseded_by: None,
-                extra: Default::default(),
-            };
+            let document = new_document.build(number, Status::Draft)?;
+            let destination = self.ensure_safe_parent(&document.path, false)?;
+            let temp = stage_file(&destination, &document.raw)?;
 
-            metadata.validate()?;
+            temp.persist_noclobber(&destination).map_err(|error| {
+                if error.error.kind() == std::io::ErrorKind::AlreadyExists {
+                    MakespecError::AlreadyExists(destination.clone())
+                } else {
+                    MakespecError::Io(error.error)
+                }
+            })?;
 
-            let raw = render_document(&metadata, &new_document.body)?;
-
-            if raw.len() as u64 > MAX_DOCUMENT_BYTES {
-                return Err(MakespecError::Invalid(format!(
-                    "complete document exceeds {MAX_DOCUMENT_BYTES} bytes"
-                )));
-            }
-
-            let destination = self.ensure_safe_parent(&path, false)?;
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&destination)
-                .map_err(|error| {
-                    if error.kind() == std::io::ErrorKind::AlreadyExists {
-                        MakespecError::AlreadyExists(destination.clone())
-                    } else {
-                        MakespecError::Io(error)
-                    }
-                })?;
-
-            if let Err(error) = file
-                .write_all(raw.as_bytes())
-                .and_then(|()| file.sync_all())
-            {
-                drop(file);
-                remove_if_matches(&destination, &raw);
-
-                return Err(error.into());
-            }
-
-            parse_document(&raw, path)
+            Ok(document)
         })
     }
 
@@ -586,16 +522,25 @@ impl ProjectStore for FilesystemStore {
                 return Err(MakespecError::ConcurrentModification(path));
             }
 
-            let parent = path
-                .parent()
-                .ok_or_else(|| MakespecError::Invalid("document path has no parent".into()))?;
-            let mut temp = NamedTempFile::new_in(parent)?;
-
-            temp.write_all(replacement.raw.as_bytes())?;
-            temp.as_file().sync_all()?;
+            let temp = stage_file(&path, &replacement.raw)?;
 
             if read_bounded(&path, MAX_DOCUMENT_BYTES)? != previous.raw {
                 return Err(MakespecError::ConcurrentModification(path));
+            }
+
+            fn stage_file(destination: &Path, content: &str) -> Result<NamedTempFile> {
+                let parent = destination
+                    .parent()
+                    .ok_or_else(|| MakespecError::Invalid("managed file has no parent".into()))?;
+                let mut temp = Builder::new()
+                    .prefix(STAGING_PREFIX)
+                    .suffix(STAGING_SUFFIX)
+                    .tempfile_in(parent)?;
+
+                temp.write_all(content.as_bytes())?;
+                temp.as_file().sync_all()?;
+
+                Ok(temp)
             }
 
             temp.persist(&path)
@@ -644,7 +589,7 @@ fn safe_relative_path(path: &str) -> Result<PathBuf> {
     Ok(path.to_path_buf())
 }
 
-fn read_bounded(path: &Path, limit: u64) -> Result<String> {
+fn regular_file_metadata(path: &Path) -> Result<fs::Metadata> {
     let metadata = fs::symlink_metadata(path)?;
 
     if metadata.file_type().is_symlink() || !metadata.is_file() {
@@ -653,6 +598,12 @@ fn read_bounded(path: &Path, limit: u64) -> Result<String> {
             path.display()
         )));
     }
+
+    Ok(metadata)
+}
+
+fn read_bounded(path: &Path, limit: u64) -> Result<String> {
+    let metadata = regular_file_metadata(path)?;
 
     if metadata.len() > limit {
         return Err(MakespecError::Invalid(format!(
@@ -677,17 +628,9 @@ fn read_bounded(path: &Path, limit: u64) -> Result<String> {
 }
 
 fn read_prefix(path: &Path, limit: u64) -> Result<String> {
-    let metadata = fs::symlink_metadata(path)?;
-
-    if metadata.file_type().is_symlink() || !metadata.is_file() {
-        return Err(MakespecError::Invalid(format!(
-            "refusing to read non-regular file {}",
-            path.display()
-        )));
-    }
-
+    let metadata = regular_file_metadata(path)?;
     let file = File::open(path)?;
-    let mut bytes = Vec::new();
+    let mut bytes = Vec::with_capacity(metadata.len().min(limit) as usize);
     Read::take(file, limit).read_to_end(&mut bytes)?;
     let delimiter = if bytes.starts_with(b"---\r\n") {
         b"\r\n---\r\n".as_slice()
@@ -723,12 +666,6 @@ fn rollback(published: &[(PathBuf, String)]) -> Vec<String> {
         .collect()
 }
 
-fn remove_if_matches(path: &Path, expected: &str) {
-    if fs::read_to_string(path).is_ok_and(|content| content == expected) {
-        let _ = fs::remove_file(path);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -741,9 +678,7 @@ mod tests {
     fn initialized_store() -> (tempfile::TempDir, FilesystemStore) {
         let directory = tempfile::tempdir().unwrap();
         let store = FilesystemStore::new(directory.path()).unwrap();
-        let skills: Vec<_> = embedded::skill_files().into_iter().collect();
-
-        service::initialize(&store, "2026-11-09", &skills).unwrap();
+        service::initialize(&store, "2026-11-09", embedded::SKILL_FILES).unwrap();
 
         (directory, store)
     }
@@ -751,9 +686,7 @@ mod tests {
     #[test]
     fn initialization_is_idempotent_and_seed_documents_check() {
         let (_directory, store) = initialized_store();
-        let skills: Vec<_> = embedded::skill_files().into_iter().collect();
-
-        service::initialize(&store, "2026-11-09", &skills).unwrap();
+        service::initialize(&store, "2026-11-09", embedded::SKILL_FILES).unwrap();
 
         assert!(service::check(&store).unwrap().is_empty());
         assert_eq!(service::list(&store).unwrap().len(), 2);
@@ -792,26 +725,47 @@ mod tests {
     }
 
     #[test]
-    fn status_changes_keep_front_matter_and_reject_invalid_transitions() {
-        let (_directory, store) = initialized_store();
+    fn creation_conflicts_preserve_existing_files_and_reserved_ids() {
+        let (directory, store) = initialized_store();
+        let destination = directory.path().join("docs/adrs/0002-collision.md");
+        let existing = store.document("ADR-0001").unwrap().raw;
+
+        fs::write(&destination, &existing).unwrap();
+
+        assert!(
+            service::check(&store)
+                .unwrap()
+                .iter()
+                .any(|error| error.contains("duplicate"))
+        );
+        assert!(matches!(
+            service::create(
+                &store,
+                Kind::Adr,
+                "Collision".into(),
+                ADR_BODY.into(),
+                "2026-11-09"
+            ),
+            Err(MakespecError::AlreadyExists(_))
+        ));
+        assert_eq!(fs::read_to_string(&destination).unwrap(), existing);
+        assert_eq!(
+            fs::read_dir(destination.parent().unwrap()).unwrap().count(),
+            2
+        );
+
+        fs::remove_file(destination).unwrap();
+
         let created = service::create(
             &store,
             Kind::Adr,
-            "A reversible choice".into(),
+            "After collision".into(),
             ADR_BODY.into(),
             "2026-11-09",
         )
         .unwrap();
-        service::change_status(&store, &created.metadata.id, Status::Proposed, None).unwrap();
 
-        let accepted =
-            service::change_status(&store, &created.metadata.id, Status::Accepted, None).unwrap();
-
-        assert_eq!(accepted.metadata.status, Status::Accepted);
-        assert!(
-            service::change_status(&store, &created.metadata.id, Status::Rejected, None).is_err()
-        );
-        assert!(service::check(&store).unwrap().is_empty());
+        assert_eq!(created.metadata.id, "ADR-0003");
     }
 
     #[test]
@@ -883,9 +837,13 @@ mod tests {
     }
 
     #[test]
-    fn discovery_rejects_unexpected_files_and_directories_in_both_read_modes() {
+    fn discovery_ignores_staging_files_but_rejects_other_entries() {
         let (directory, store) = initialized_store();
         let unexpected = directory.path().join("docs/adrs/unexpected.txt");
+        let _staged = stage_file(&unexpected, "unfinished content").unwrap();
+
+        assert_eq!(store.documents().unwrap().len(), 2);
+        assert_eq!(store.catalog().unwrap().len(), 2);
 
         fs::write(&unexpected, "not a document").unwrap();
 

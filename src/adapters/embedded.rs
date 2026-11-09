@@ -1,26 +1,18 @@
-use std::collections::BTreeMap;
-
-pub fn skill_files() -> BTreeMap<&'static str, &'static str> {
-    BTreeMap::from([
-        (
-            "SKILL.md",
-            include_str!("../../.agents/skills/makespec/SKILL.md"),
-        ),
-        (
-            "references/adr-template.md",
-            include_str!("../../.agents/skills/makespec/references/adr-template.md"),
-        ),
-        (
-            "references/cli.md",
-            include_str!("../../.agents/skills/makespec/references/cli.md"),
-        ),
-        (
-            "references/planning.md",
-            include_str!("../../.agents/skills/makespec/references/planning.md"),
-        ),
-        (
-            "references/rfc-template.md",
-            include_str!("../../.agents/skills/makespec/references/rfc-template.md"),
-        ),
-    ])
-}
+pub const SKILL_FILES: &[(&str, &str)] = &[
+    (
+        "SKILL.md",
+        include_str!("../../.agents/skills/makespec/SKILL.md"),
+    ),
+    (
+        "references/adr-template.md",
+        include_str!("../../.agents/skills/makespec/references/adr-template.md"),
+    ),
+    (
+        "references/cli.md",
+        include_str!("../../.agents/skills/makespec/references/cli.md"),
+    ),
+    (
+        "references/rfc-template.md",
+        include_str!("../../.agents/skills/makespec/references/rfc-template.md"),
+    ),
+];

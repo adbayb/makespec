@@ -4,9 +4,8 @@ use chrono::NaiveDate;
 
 use super::{
     document::{
-        Document, DocumentSummary, Kind, MAX_DOCUMENT_BYTES, Metadata, NewDocument, Status,
-        parse_document, parse_id, render_document, slugify, update_metadata, validate_acceptance,
-        validate_structure,
+        Document, DocumentSummary, Kind, NewDocument, Status, parse_id, slugify, update_metadata,
+        validate_document,
     },
     error::{MakespecError, Result},
 };
@@ -49,7 +48,7 @@ pub(crate) fn initialize(
     let rfc = seed_document(Kind::Rfc, SEED_RFC_TITLE, date, rfc_seed_body())?;
 
     for seed in [&adr, &rfc] {
-        let errors = validate_acceptance(seed);
+        let errors = validate_document(seed);
 
         if !errors.is_empty() {
             return Err(structure_error(
@@ -97,7 +96,7 @@ pub(crate) fn initialize(
                 )));
             }
 
-            let errors = validate_acceptance(document);
+            let errors = validate_document(document);
 
             if !errors.is_empty() {
                 return Err(structure_error(
@@ -141,21 +140,9 @@ pub(crate) fn create(
         date: date.to_string(),
         body,
     };
-    let validation_document = build_document(
-        &format!("{}-0001", new_document.kind.id_prefix()),
-        &new_document,
-        Status::Draft,
-        "",
-    )?;
+    let validation_document = new_document.build(1, Status::Draft)?;
 
-    if validation_document.raw.len() as u64 > MAX_DOCUMENT_BYTES {
-        return Err(MakespecError::Invalid(format!(
-            "complete document exceeds {} bytes",
-            MAX_DOCUMENT_BYTES
-        )));
-    }
-
-    let errors = validate_structure(&validation_document);
+    let errors = validate_document(&validation_document);
 
     if !errors.is_empty() {
         return Err(structure_error("document structure is invalid", &errors));
@@ -186,12 +173,6 @@ pub(crate) fn change_status(
         ));
     }
 
-    let documents = store.catalog()?;
-    documents
-        .iter()
-        .find(|document| document.metadata.id == id)
-        .ok_or_else(|| MakespecError::NotFound(id.to_string()))?;
-
     let current = store.document(id)?;
 
     if current.metadata.status == next_status {
@@ -217,16 +198,7 @@ pub(crate) fn change_status(
     metadata.status = next_status;
     metadata.superseded_by = None;
 
-    if matches!(next_status, Status::Proposed | Status::Accepted) {
-        let errors = validate_acceptance(&current);
-
-        if !errors.is_empty() {
-            return Err(structure_error(
-                &format!("cannot set {id} to {next_status}"),
-                &errors,
-            ));
-        }
-    } else if next_status == Status::Superseded {
+    if next_status == Status::Superseded {
         let target_id = superseded_by.expect("checked above");
         let (target_kind, _) = parse_id(target_id)?;
         let (current_kind, _, _) = current.metadata.validate()?;
@@ -238,6 +210,7 @@ pub(crate) fn change_status(
             )));
         }
 
+        let documents = store.catalog()?;
         let target = documents
             .iter()
             .find(|document| document.metadata.id == target_id)
@@ -254,6 +227,17 @@ pub(crate) fn change_status(
 
     let replacement = update_metadata(&current, metadata)?;
 
+    if matches!(next_status, Status::Proposed | Status::Accepted) {
+        let errors = validate_document(&replacement);
+
+        if !errors.is_empty() {
+            return Err(structure_error(
+                &format!("cannot set {id} to {next_status}"),
+                &errors,
+            ));
+        }
+    }
+
     store.replace(&current, &replacement)
 }
 
@@ -261,13 +245,12 @@ pub(crate) fn check(store: &impl ProjectStore) -> Result<Vec<String>> {
     let documents = store.documents()?;
     let mut errors = Vec::new();
     let mut by_id = BTreeMap::new();
-    let mut numbers = BTreeSet::new();
 
     for document in &documents {
         let path = &document.path;
 
         match document.metadata.validate() {
-            Ok((kind, status, number)) => {
+            Ok((kind, _, number)) => {
                 let expected_prefix = format!("docs/{}/{number:04}-", kind.directory());
                 let valid_filename = path
                     .strip_prefix(&expected_prefix)
@@ -282,22 +265,18 @@ pub(crate) fn check(store: &impl ProjectStore) -> Result<Vec<String>> {
                     ));
                 }
 
-                if !numbers.insert((kind, number)) {
+                if by_id
+                    .insert(document.metadata.id.as_str(), document)
+                    .is_some()
+                {
                     errors.push(format!(
                         "{path}: duplicate {} identifier number {number:04}",
                         kind.as_str()
                     ));
                 }
 
-                by_id.insert(document.metadata.id.as_str(), document);
-                let document_errors = if matches!(status, Status::Draft | Status::Rejected) {
-                    validate_structure(document)
-                } else {
-                    validate_acceptance(document)
-                };
-
                 errors.extend(
-                    document_errors
+                    validate_document(document)
                         .into_iter()
                         .map(|error| format!("{path}: {error}")),
                 );
@@ -366,38 +345,14 @@ fn supersession_reaches(start: &str, sought: &str, documents: &BTreeMap<&str, &D
 }
 
 fn seed_document(kind: Kind, title: &str, date: &str, body: &str) -> Result<Document> {
-    let slug = slugify(title)?;
-    let metadata = Metadata {
-        id: format!("{}-0001", kind.id_prefix()),
+    NewDocument {
+        kind,
         title: title.to_string(),
+        slug: slugify(title)?,
         date: date.to_string(),
-        status: Status::Accepted,
-        superseded_by: None,
-        extra: BTreeMap::new(),
-    };
-    let path = format!("docs/{}/{:04}-{slug}.md", kind.directory(), 1);
-    let raw = render_document(&metadata, body)?;
-
-    parse_document(&raw, path)
-}
-
-fn build_document(
-    id: &str,
-    new_document: &NewDocument,
-    status: Status,
-    path: &str,
-) -> Result<Document> {
-    let metadata = Metadata {
-        id: id.to_string(),
-        title: new_document.title.clone(),
-        date: new_document.date.clone(),
-        status,
-        superseded_by: None,
-        extra: BTreeMap::new(),
-    };
-    let raw = render_document(&metadata, &new_document.body)?;
-
-    parse_document(&raw, path.to_string())
+        body: body.to_string(),
+    }
+    .build(1, Status::Accepted)
 }
 
 fn structure_error(context: &str, errors: &[String]) -> MakespecError {
@@ -474,11 +429,12 @@ mod tests {
 
     #[test]
     fn rfc_drafts_can_be_unfinished_and_need_only_functional_criteria() {
-        let draft = seed_document(Kind::Rfc, "Local search", "2026-11-09", DRAFT_RFC_BODY).unwrap();
+        let draft = rfc(DRAFT_RFC_BODY, Status::Draft);
 
-        assert!(validate_structure(&draft).is_empty());
+        assert!(validate_document(&draft).is_empty());
+        assert!(validate_document(&rfc(DRAFT_RFC_BODY, Status::Rejected)).is_empty());
 
-        let errors = validate_acceptance(&draft);
+        let errors = validate_document(&rfc(DRAFT_RFC_BODY, Status::Proposed));
 
         for expected in [
             "`## Design`",
@@ -499,8 +455,7 @@ mod tests {
             )
             .replace("**Chosen option:**", "**Chosen option:** Local search")
             + "\n\n## Design\n\nMatch a query against record titles.\n\n## Adoption\n\nShip the search command and verify title matches.";
-        let complete = seed_document(Kind::Rfc, "Local search", "2026-11-09", &body).unwrap();
-        let errors = validate_acceptance(&complete);
+        let errors = validate_document(&rfc(&body, Status::Proposed));
 
         assert!(errors.is_empty(), "{errors:?}");
     }
@@ -546,8 +501,7 @@ mod tests {
             ),
         ] {
             let body = DRAFT_RFC_BODY.replace(original, replacement);
-            let document = seed_document(Kind::Rfc, "Local search", "2026-11-09", &body).unwrap();
-            let errors = validate_structure(&document);
+            let errors = validate_document(&rfc(&body, Status::Draft));
 
             assert!(
                 errors.iter().any(|error| error.contains(expected)),
@@ -557,81 +511,77 @@ mod tests {
     }
 
     #[test]
-    fn rfc_template_has_valid_structure_but_requires_completion() {
-        let template = include_str!("../../.agents/skills/makespec/references/rfc-template.md");
-        let document = seed_document(Kind::Rfc, SEED_RFC_TITLE, "2026-11-09", template).unwrap();
-        let errors = validate_structure(&document);
+    fn template_drafts_are_valid_but_require_completion_before_review() {
+        for (kind, body) in [
+            (
+                Kind::Adr,
+                include_str!("../../.agents/skills/makespec/references/adr-template.md"),
+            ),
+            (
+                Kind::Rfc,
+                include_str!("../../.agents/skills/makespec/references/rfc-template.md"),
+            ),
+        ] {
+            let new_document = NewDocument {
+                kind,
+                title: "Template record".into(),
+                slug: "template-record".into(),
+                date: "2026-11-09".into(),
+                body: body.into(),
+            };
+            let errors = validate_document(&new_document.build(1, Status::Draft).unwrap());
 
-        assert!(errors.is_empty(), "{errors:?}");
-        assert!(
-            validate_acceptance(&document)
-                .iter()
-                .any(|error| { error.contains("unresolved template placeholder") })
-        );
+            assert!(errors.is_empty(), "{errors:?}");
+            assert!(
+                validate_document(&new_document.build(1, Status::Proposed).unwrap())
+                    .iter()
+                    .any(|error| error.contains("unresolved template placeholder"))
+            );
+        }
     }
 
     #[test]
-    fn rfc_seed_passes_acceptance_and_chosen_must_requirement_is_enforced() {
-        let valid =
-            seed_document(Kind::Rfc, SEED_RFC_TITLE, "2026-11-09", rfc_seed_body()).unwrap();
+    fn rfc_comparisons_validate_descriptions_labels_and_chosen_option_eligibility() {
+        assert!(validate_document(&rfc(rfc_seed_body(), Status::Proposed)).is_empty());
 
-        assert!(validate_acceptance(&valid).is_empty());
+        for (original, replacement, expected, valid_draft) in [
+            (
+                "Fully meets - The format requires functionality criteria, constraints, and comparisons.",
+                "Does not meet - The format requires functionality criteria, constraints, and comparisons.",
+                "chosen option does not fully meet a MUST requirement",
+                true,
+            ),
+            (
+                "PASS - The CLI reads and writes local Markdown files.",
+                "FAIL - The CLI reads and writes local Markdown files.",
+                "chosen option fails a constraint",
+                true,
+            ),
+            (
+                "Fully meets - The format requires functionality criteria, constraints, and comparisons.",
+                "3 - The format requires functionality criteria, constraints, and comparisons.",
+                "invalid requirement label `3` for `FR-001`",
+                false,
+            ),
+            (
+                "| FR-001 | MUST | An RFC specifies functionality requirements, constraints, and qualitative alternatives. |",
+                "| FR-001 | MUST | |",
+                "needs a description",
+                false,
+            ),
+        ] {
+            let body = rfc_seed_body().replace(original, replacement);
+            let errors = validate_document(&rfc(&body, Status::Proposed));
 
-        let body = rfc_seed_body().replace(
-            "Fully meets - The format requires functionality criteria, constraints, and comparisons.",
-            "Does not meet - The format requires functionality criteria, constraints, and comparisons.",
-        );
-        let invalid = seed_document(Kind::Rfc, SEED_RFC_TITLE, "2026-11-09", &body).unwrap();
-
-        assert!(validate_structure(&invalid).is_empty());
-        assert!(validate_acceptance(&invalid).iter().any(|error| {
-            error.contains("chosen option does not fully meet a MUST requirement")
-        }));
-    }
-
-    #[test]
-    fn chosen_option_must_pass_every_constraint() {
-        let body = rfc_seed_body().replace(
-            "PASS - The CLI reads and writes local Markdown files.",
-            "FAIL - The CLI reads and writes local Markdown files.",
-        );
-        let document = seed_document(Kind::Rfc, SEED_RFC_TITLE, "2026-11-09", &body).unwrap();
-
-        assert!(
-            validate_acceptance(&document)
-                .iter()
-                .any(|error| error == "chosen option fails a constraint")
-        );
-    }
-
-    #[test]
-    fn rfc_comparison_requires_labels_instead_of_numeric_scores() {
-        let body = rfc_seed_body().replace(
-            "Fully meets - The format requires functionality criteria, constraints, and comparisons.",
-            "3 - The format requires functionality criteria, constraints, and comparisons.",
-        );
-        let document = seed_document(Kind::Rfc, SEED_RFC_TITLE, "2026-11-09", &body).unwrap();
-
-        assert!(
-            validate_structure(&document)
-                .iter()
-                .any(|error| { error.contains("invalid requirement label `3` for `FR-001`") })
-        );
-    }
-
-    #[test]
-    fn rfc_rejects_empty_requirement_descriptions() {
-        let body = rfc_seed_body().replace(
-            "| FR-001 | MUST | An RFC specifies functionality requirements, constraints, and qualitative alternatives. |",
-            "| FR-001 | MUST | |",
-        );
-        let document = seed_document(Kind::Rfc, SEED_RFC_TITLE, "2026-11-09", &body).unwrap();
-
-        assert!(
-            validate_structure(&document)
-                .iter()
-                .any(|error| error.contains("needs a description"))
-        );
+            assert!(
+                errors.iter().any(|error| error.contains(expected)),
+                "{errors:?}"
+            );
+            assert_eq!(
+                validate_document(&rfc(&body, Status::Draft)).is_empty(),
+                valid_draft
+            );
+        }
     }
 
     #[test]
@@ -645,8 +595,7 @@ mod tests {
                 "PASS - The CLI reads and writes local Markdown files.",
                 "FAIL - The CLI reads and writes local Markdown files.",
             );
-        let document = seed_document(Kind::Rfc, SEED_RFC_TITLE, "2026-11-09", &body).unwrap();
-        let errors = validate_acceptance(&document);
+        let errors = validate_document(&rfc(&body, Status::Proposed));
 
         assert!(
             errors
@@ -658,5 +607,17 @@ mod tests {
                 .iter()
                 .any(|error| error == "chosen option fails a constraint")
         );
+    }
+
+    fn rfc(body: &str, status: Status) -> Document {
+        NewDocument {
+            kind: Kind::Rfc,
+            title: "Local search".into(),
+            slug: "local-search".into(),
+            date: "2026-11-09".into(),
+            body: body.into(),
+        }
+        .build(1, status)
+        .unwrap()
     }
 }

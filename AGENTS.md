@@ -20,10 +20,4 @@
 
 ## Checks
 
-Use the existing CI checks:
-
-```sh
-cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-features
-```
+Run the [contribution checks](CONTRIBUTING.md#how-to-run-the-checks).
