@@ -18,6 +18,15 @@ fn cli_initializes_creates_lists_changes_status_and_checks() {
             .join(".agents/skills/makespec/SKILL.md")
             .is_file()
     );
+    assert_eq!(
+        std::fs::read_to_string(
+            project
+                .path()
+                .join(".agents/skills/makespec/references/writing.md")
+        )
+        .unwrap(),
+        include_str!("../.agents/skills/makespec/references/writing.md")
+    );
 
     let created = create(project.path(), "adr", "Document a focused choice", ADR_BODY);
 

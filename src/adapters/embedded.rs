@@ -15,4 +15,8 @@ pub const SKILL_FILES: &[(&str, &str)] = &[
         "references/rfc-template.md",
         include_str!("../../.agents/skills/makespec/references/rfc-template.md"),
     ),
+    (
+        "references/writing.md",
+        include_str!("../../.agents/skills/makespec/references/writing.md"),
+    ),
 ];
