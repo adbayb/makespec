@@ -10,7 +10,7 @@ Install [stable Rust](https://rustup.rs/) and Git, then clone the repository. Yo
 cargo run -- --help
 ```
 
-Read the [product specification](docs/spec.md) and [contributor instructions](AGENTS.md) before making changes.
+Read [RFC-0002: Makespec product requirements document (PRD)](docs/specifications/0002-makespec-product-requirements-document.md) and the [contributor instructions](AGENTS.md) before making changes.
 
 - For bug reports, include reproduction steps, the Makespec version, your operating system, and the expected and actual behavior.
 - For features, describe the use case and discuss changes to the document format or command surface before implementing them.

@@ -154,7 +154,7 @@ fn invalid_document_body_is_rejected_without_writing_a_record() {
 fn rfc_drafts_require_completion_before_review_and_acceptance() {
     let project = initialized_project();
 
-    let body = "## Context\n\nSearch local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Find records by title. |\n\n## Options\n\n| Criterion ID | Do nothing | Search |\n| --- | --- | --- |\n| FR-001 | | |\n\n**Chosen option:**";
+    let body = "## Context\n\nSearch local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Find records by title. |\n\n## Options\n\n| Criterion ID | No change | Search |\n| --- | --- | --- |\n| FR-001 | | |\n\n**Chosen option:**";
     let created = create(project.path(), "rfc", "Local search", body);
 
     assert!(

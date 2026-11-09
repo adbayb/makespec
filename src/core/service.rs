@@ -389,12 +389,12 @@ Define a consistent RFC format for functionality proposals. Use this format for 
 
 ## Options
 
-- Do nothing: leave proposal formats to individual authors.
+- No change: leave proposal formats to individual authors.
 - Free-form Markdown: record proposals without required sections or comparison rules.
 - ADR-only records: reuse the focused decision format for functionality proposals.
 - Makespec format: use shared criteria, an options comparison, and a design for the chosen option.
 
-| Criterion ID | Do nothing | Free-form Markdown | ADR-only records | Makespec format |
+| Criterion ID | No change | Free-form Markdown | ADR-only records | Makespec format |
 | --- | --- | --- | --- | --- |
 | FR-001 | Does not meet - Proposals need not capture the required areas. | Does not meet - No structure requires all required areas. | Does not meet - ADRs do not specify functionality proposals. | Fully meets - The format requires functionality criteria, constraints, and comparisons. |
 | NFR-001 | Partially meets - Markdown stays readable, but authors lack a shared structure. | Fully meets - Free-form Markdown remains easy to read and diff. | Fully meets - ADRs remain plain Markdown in Git. | Fully meets - The format uses reviewable Markdown tables. |
@@ -412,7 +412,7 @@ RFC bodies use Context, Requirements and constraints, Options, Design, and Adopt
 
 An optional References section comes last. Link related ADRs and RFCs by ID using relative Markdown paths, explain each relationship, and include external sources when relevant. An RFC may link to broader or focused RFCs instead of duplicating requirements.
 
-Functional requirements use unique `FR-001`-style IDs, and non-functional requirements use `NFR-001`-style IDs. Both use priority (MUST, SHOULD, or MAY). Constraints use unique `C-001` IDs. Options includes candidate descriptions and one comparison table with criteria in rows and options in columns, including Do nothing. Requirement cells use `Does not meet`, `Partially meets`, or `Fully meets`, followed by ` - ` and evidence. Constraint cells use `PASS` or `FAIL`, followed by ` - ` and evidence. The chosen option must fully meet each MUST requirement and pass every constraint. Explain the choice using criterion IDs rather than an aggregate score.
+Functional requirements use unique `FR-001`-style IDs, and non-functional requirements use `NFR-001`-style IDs. Both use priority (MUST, SHOULD, or MAY). Constraints use unique `C-001` IDs. Options includes candidate descriptions and one comparison table with criteria in rows and options in columns, including No change. Requirement cells use `Does not meet`, `Partially meets`, or `Fully meets`, followed by ` - ` and evidence. Constraint cells use `PASS` or `FAIL`, followed by ` - ` and evidence. The chosen option must fully meet each MUST requirement and pass every constraint. Explain the choice using criterion IDs rather than an aggregate score.
 
 New records start as drafts. Draft RFCs require Context, Requirements and constraints, and Options, including at least one functional requirement and a comparison table. Draft comparison cells and the chosen option may remain blank, and Design and Adoption may be omitted. Before promotion to proposed, complete the five sections, assess every criterion for every option, select an eligible option, and replace template placeholders. Proposed records may return to draft for rework or proceed to accepted or rejected. Drafts may also be rejected. Accepted records may become deprecated or superseded.
 
@@ -431,7 +431,7 @@ Initialize a repository with the CLI, which creates the accepted format RFC and 
 mod tests {
     use super::*;
 
-    const DRAFT_RFC_BODY: &str = "## Context\n\nLet users search local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Search records by title. |\n\n## Options\n\n| Criterion ID | Do nothing | Local search |\n| --- | --- | --- |\n| FR-001 | | |\n\n**Chosen option:**";
+    const DRAFT_RFC_BODY: &str = "## Context\n\nLet users search local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Search records by title. |\n\n## Options\n\n| Criterion ID | No change | Local search |\n| --- | --- | --- |\n| FR-001 | | |\n\n**Chosen option:**";
 
     #[test]
     fn rfc_drafts_can_be_unfinished_and_need_only_functional_criteria() {
@@ -469,11 +469,7 @@ mod tests {
     #[test]
     fn rfc_drafts_still_reject_inconsistent_comparison_structure() {
         for (original, replacement, expected) in [
-            (
-                "Do nothing",
-                "Keep current behavior",
-                "include a `Do nothing`",
-            ),
+            ("No change", "Do nothing", "include a `No change`"),
             (
                 "| FR-001 | MUST | Search records by title. |",
                 "",

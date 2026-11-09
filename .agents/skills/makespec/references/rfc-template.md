@@ -23,14 +23,14 @@ Keep this subsection only for genuine hard boundaries, such as a required platfo
 
 ## Options
 
-Describe each candidate, including `Do nothing` (the current behavior). Name options in the column headers and compare them against the same criteria. Include one row for each requirement and constraint ID; remove rows for criteria you omit above.
+Describe each candidate, including `No change` (keep the current behavior without the proposed feature or modification). Name options in the column headers and compare them against the same criteria. Include one row for each requirement and constraint ID; remove rows for criteria you omit above.
 
 Leave unassessed cells blank while the RFC is a draft. Before promoting it to proposed, fill each cell with `LABEL - explanation` and supporting evidence:
 
 - Requirements: `Does not meet`, `Partially meets`, or `Fully meets`.
 - Constraints: `PASS` or `FAIL`.
 
-| Criterion ID | Do nothing | Proposed approach |
+| Criterion ID | No change | Proposed approach |
 | --- | --- | --- |
 | FR-001 | | |
 | NFR-001 | | |

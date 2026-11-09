@@ -144,7 +144,7 @@ Each document kind has its own incrementing IDs. Records contain a date and use 
 
 Makespec validates paths and metadata, limits document input to 2 MiB, uses exclusive creation, and checks for external edits before replacing files. It keeps ID allocation locks outside the repository. Advisory locks coordinate Makespec processes but cannot control external editors.
 
-Read [`docs/spec.md`](docs/spec.md) for the product and implementation specification.
+Read [RFC-0002: Makespec product requirements document (PRD)](docs/specifications/0002-makespec-product-requirements-document.md) for the product and implementation specification.
 
 <br>
 

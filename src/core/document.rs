@@ -782,9 +782,9 @@ fn validate_comparison(
 
     if !options
         .iter()
-        .any(|option| option.eq_ignore_ascii_case("do nothing"))
+        .any(|option| option.eq_ignore_ascii_case("no change"))
     {
-        errors.push("Options must include a `Do nothing` option".into());
+        errors.push("Options must include a `No change` option".into());
     }
 
     if (complete && chosen.is_empty())
