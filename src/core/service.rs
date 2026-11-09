@@ -370,7 +370,7 @@ fn adr_seed_body() -> &'static str {
 fn rfc_seed_body() -> &'static str {
     r#"## Context
 
-Define a consistent RFC format for functionality proposals. Authors need a reviewable record of the problem, evaluation criteria, options, chosen design, and adoption approach without a hosted service.
+Define a consistent RFC format for functionality proposals. Use this format for product requirements documents (PRDs) as well as technical change proposals. Authors need a reviewable record of the problem, evaluation criteria, options, chosen design, and adoption approach without a hosted service.
 
 ## Requirements and constraints
 
@@ -409,6 +409,8 @@ The chosen format fully meets FR-001 and satisfies the hard constraint. It keeps
 Every RFC has YAML front matter containing `id`, `title`, `date`, and `status`. The CLI supplies this metadata and the title heading. The ID prefix determines the document kind, and the filename retains its creation-time slug if the title later changes.
 
 RFC bodies use Context, Requirements and constraints, Options, Design, and Adoption in that order. Context starts with a short proposal summary and explains the problem and scope. Put functional requirements in a `### Requirements` table, adding non-functional requirements only when relevant. Add a separate `### Constraints` table only for genuine hard boundaries. An optional Open questions section may follow Adoption.
+
+An optional References section comes last. Link related ADRs and RFCs by ID using relative Markdown paths, explain each relationship, and include external sources when relevant. An RFC may link to broader or focused RFCs instead of duplicating requirements.
 
 Functional requirements use unique `FR-001`-style IDs, and non-functional requirements use `NFR-001`-style IDs. Both use priority (MUST, SHOULD, or MAY). Constraints use unique `C-001` IDs. Options includes candidate descriptions and one comparison table with criteria in rows and options in columns, including Do nothing. Requirement cells use `Does not meet`, `Partially meets`, or `Fully meets`, followed by ` - ` and evidence. Constraint cells use `PASS` or `FAIL`, followed by ` - ` and evidence. The chosen option must fully meet each MUST requirement and pass every constraint. Explain the choice using criterion IDs rather than an aggregate score.
 
@@ -542,6 +544,60 @@ mod tests {
                     .any(|error| error.contains("unresolved template placeholder"))
             );
         }
+    }
+
+    #[test]
+    fn references_are_optional_unique_nonempty_and_in_template_order() {
+        let references = "## References\n\n- [RFC-0001: Specify the RFC format](../rfcs/0001-specify-the-rfc-format.md) defines the format.";
+
+        for (kind, body) in [
+            (Kind::Adr, adr_seed_body().to_string()),
+            (
+                Kind::Rfc,
+                format!(
+                    "{}\n\n## Open questions\n\nWhich follow-up metrics would help?",
+                    rfc_seed_body()
+                ),
+            ),
+        ] {
+            for (body, expected_error) in [
+                (body.clone(), None),
+                (format!("{body}\n\n{references}"), None),
+                (
+                    format!("{body}\n\n## References\n"),
+                    Some("`## References` must contain content"),
+                ),
+                (
+                    format!("{body}\n\n{references}\n\n{references}"),
+                    Some("duplicate `## References`"),
+                ),
+                (format!("{references}\n\n{body}"), Some("template order")),
+            ] {
+                let document =
+                    seed_document(kind, "Reference validation", "2026-11-09", &body).unwrap();
+                let errors = validate_document(&document);
+
+                if let Some(expected) = expected_error {
+                    assert!(
+                        errors.iter().any(|error| error.contains(expected)),
+                        "{kind}: {errors:?}"
+                    );
+                } else {
+                    assert!(errors.is_empty(), "{kind}: {errors:?}");
+                }
+            }
+        }
+
+        let body = format!(
+            "{}\n\n{references}\n\n## Open questions\n\nWhich follow-up metrics would help?",
+            rfc_seed_body()
+        );
+        let errors = validate_document(&rfc(&body, Status::Proposed));
+
+        assert!(
+            errors.iter().any(|error| error.contains("template order")),
+            "{errors:?}"
+        );
     }
 
     #[test]

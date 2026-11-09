@@ -55,3 +55,7 @@ Replace with rollout, compatibility, and verification steps. Include migration o
 ## Open questions
 
 List remaining questions and how to resolve them. Resolve questions that prevent a supported choice or implementable design before promotion to proposed. Remove this optional section when no questions remain.
+
+## References
+
+Link related ADRs and RFCs by ID using relative Markdown paths, and include external sources when relevant. Add a short note explaining each relationship. Remove this optional section when there are no references.

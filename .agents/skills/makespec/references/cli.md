@@ -21,4 +21,6 @@ Same-status requests are idempotent. Supersession requires a different, accepted
 
 Promotion to `proposed` requires complete content. RFCs need all five sections, a complete comparison, and an eligible chosen option. Drafts may leave assessment cells, comparison rows, and the chosen option unfinished and omit Design and Adoption. Non-functional requirements (NFR) and constraints are optional; at least one functional requirement is required.
 
+Both formats may end with one optional `## References` section. If present, it must contain content and follow the other template sections, including Open questions for RFCs.
+
 Exit codes are 0 for success, 1 for document or I/O errors, and 2 for invalid command-line arguments. Diagnostics go to stderr.

@@ -472,7 +472,7 @@ pub fn validate_document(document: &Document) -> Vec<String> {
     }
 
     let sections: &[&str] = match kind {
-        Kind::Adr => &["Context", "Decision", "Consequences"],
+        Kind::Adr => &["Context", "Decision", "Consequences", "References"],
         Kind::Rfc => &[
             "Context",
             "Requirements and constraints",
@@ -480,12 +480,12 @@ pub fn validate_document(document: &Document) -> Vec<String> {
             "Design",
             "Adoption",
             "Open questions",
+            "References",
         ],
     };
     let required = match kind {
         Kind::Rfc if complete => &sections[..5],
-        Kind::Rfc => &sections[..3],
-        Kind::Adr => sections,
+        _ => &sections[..3],
     };
     let level_two: Vec<&str> = headings
         .iter()
@@ -517,7 +517,7 @@ pub fn validate_document(document: &Document) -> Vec<String> {
         .collect();
 
     if section_order.windows(2).any(|pair| pair[0] >= pair[1]) {
-        errors.push("required sections are not in template order".into());
+        errors.push("sections are not in template order".into());
     }
 
     if kind == Kind::Rfc {
