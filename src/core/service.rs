@@ -440,7 +440,7 @@ Specification bodies use Context, Requirements and constraints, Options, Design,
 
 An optional References section comes last. Link related decisions and specifications by ID using relative Markdown paths, explain each relationship, and include external sources when relevant. A specification may link to broader or focused specifications instead of duplicating requirements.
 
-Functional requirements use unique `FR-001`-style IDs, and non-functional requirements use `NFR-001`-style IDs. Both use priority (MUST, SHOULD, or MAY). Constraints use unique `C-001` IDs. Options includes candidate descriptions and one comparison table with criteria in rows and options in columns, including No change. Requirement cells use `Does not meet`, `Partially meets`, or `Fully meets`, followed by ` - ` and evidence. Constraint cells use `PASS` or `FAIL`, followed by ` - ` and evidence. The chosen option must fully meet each MUST requirement and pass every constraint. Explain the choice using criterion IDs rather than an aggregate score.
+Functional requirements use unique `FR-001`-style IDs, and non-functional requirements use `NFR-001`-style IDs. Both use priority (MUST, SHOULD, or MAY). Constraints use unique `C-001` IDs. Options includes candidate descriptions and one comparison table with criteria in rows and options in columns. Include at least two options. Include No change only when it represents a meaningful current-state alternative; omit it when it would add no useful comparison, such as for a greenfield project with no existing capability. When omitting No change, compare at least two distinct approaches that address the same need. Requirement cells use `Does not meet`, `Partially meets`, or `Fully meets`, followed by ` - ` and evidence. Constraint cells use `PASS` or `FAIL`, followed by ` - ` and evidence. The chosen option must fully meet each MUST requirement and pass every constraint. Explain the choice using criterion IDs rather than an aggregate score.
 
 New records start as drafts. Draft specifications require Context, Requirements and constraints, and Options, including at least one functional requirement and a comparison table. Draft comparison cells and the chosen option may remain blank, and Design and Adoption may be omitted. Before promotion to proposed, complete the five sections, assess every criterion for every option, select an eligible option, and replace template placeholders. Proposed records may return to draft for rework or proceed to accepted or rejected. Drafts may also be rejected. Accepted records may become deprecated or superseded.
 
@@ -496,7 +496,11 @@ Create drafts from the bundled template and run `makespec check` after edits. Co
     #[test]
     fn specification_drafts_still_reject_inconsistent_comparison_structure() {
         for (original, replacement, expected) in [
-            ("No change", "Do nothing", "include a `No change`"),
+            (
+                "| Criterion ID | No change | Local search |\n| --- | --- | --- |\n| FR-001 | | |",
+                "| Criterion ID | Local search |\n| --- | --- |\n| FR-001 | |",
+                "at least two option columns",
+            ),
             (
                 "| FR-001 | MUST | Search records by title. |",
                 "",
@@ -537,6 +541,31 @@ Create drafts from the bundled template and run `makespec check` after edits. Co
                 "{errors:?}"
             );
         }
+    }
+
+    #[test]
+    fn complete_specifications_can_compare_two_approaches_without_no_change() {
+        let body = complete_specification_body()
+            .replace("| --- | --- | --- | --- | --- |", "| --- | --- | --- |")
+            .replace(
+                "| Criterion ID | No change | Free-form Markdown | Decision-only records | Makespec format |",
+                "| Criterion ID | Free-form Markdown | Makespec format |",
+            )
+            .replace(
+                "| FR-001 | Does not meet - Proposals need not capture the required areas. | Does not meet - No structure requires all required areas. | Does not meet - Decisions do not specify functionality. | Fully meets - The format requires functionality criteria, constraints, and comparisons. |",
+                "| FR-001 | Does not meet - No structure requires all required areas. | Fully meets - The format requires functionality criteria, constraints, and comparisons. |",
+            )
+            .replace(
+                "| NFR-001 | Partially meets - Markdown stays readable, but authors lack a shared structure. | Fully meets - Free-form Markdown remains easy to read and diff. | Fully meets - Decisions remain plain Markdown in Git. | Fully meets - The format uses reviewable Markdown tables. |",
+                "| NFR-001 | Fully meets - Free-form Markdown remains easy to read and diff. | Fully meets - The format uses reviewable Markdown tables. |",
+            )
+            .replace(
+                "| C-001 | PASS - It requires no service or database. | PASS - It uses repository files only. | PASS - It uses repository files only. | PASS - The CLI reads and writes local Markdown files. |",
+                "| C-001 | PASS - It uses repository files only. | PASS - The CLI reads and writes local Markdown files. |",
+            );
+        let errors = validate_document(&specification(&body, Status::Proposed));
+
+        assert!(errors.is_empty(), "{errors:?}");
     }
 
     #[test]

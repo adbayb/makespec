@@ -23,7 +23,7 @@ Keep this subsection only for genuine hard boundaries, such as a required platfo
 
 ## Options
 
-Describe each candidate, including `No change` (keep the current behavior without the proposed feature or modification). Name options in the column headers and compare them against the same criteria. Include one row for each requirement and constraint ID; remove rows for criteria you omit above.
+Describe each candidate and its baseline. Include at least two options. Include `No change` only when it represents a meaningful current-state alternative; omit it when it would add no useful comparison, such as for a greenfield project with no existing capability. When omitting `No change`, compare at least two distinct approaches that address the same need. Name options in the column headers and compare them against the same criteria. Include one row for each requirement and constraint ID; remove rows for criteria you omit above.
 
 Leave unassessed cells blank while the specification is a draft. Before promoting it to proposed, fill each cell with `LABEL - explanation` and supporting evidence:
 

@@ -44,26 +44,26 @@ Scope covers local creation, discovery, validation, lifecycle management, safe s
 
 ## Options
 
-The baseline is a repository considering adoption, where contributors maintain Markdown records manually with a local editor and Git. Assessments concern capabilities and safeguards supplied by each workflow, rather than what contributors could achieve through manual care or additional automation.
+This specification compares two ways to manage project records: a template-driven Markdown workflow, where contributors use shared templates and Git conventions, and Makespec CLI, which adds local automation. Assessments concern capabilities and safeguards supplied by each workflow, rather than what contributors could achieve through additional manual care or automation.
 
-- No change: continue authoring records, assigning IDs, checking completeness, and updating statuses by convention, without a dedicated record-management tool.
+- Template-driven Markdown: use shared templates and contributor guidance to author records, assign IDs, review completeness, and change statuses manually in Git.
 - Makespec CLI: use the local Rust binary for creation, listing, validation, and lifecycle changes, with the installed skill guiding agents. Keep prose authoring and review in existing workspace tools.
 
-| Criterion ID | No change | Makespec CLI |
+| Criterion ID | Template-driven Markdown | Makespec CLI |
 | --- | --- | --- |
-| FR-001 | Partially meets - Authors can keep dated Markdown records, but numbering and directory conventions have no automated enforcement. | Fully meets - Record construction and storage enforce per-kind IDs, metadata, and fixed directories. |
-| FR-002 | Does not meet - Contributors must assemble directories, the adoption decision, and agent guidance themselves. | Fully meets - Initialization creates the adoption decision and skill, preserves existing records, and generates no specification. |
-| FR-003 | Does not meet - Review conventions cannot reject an invalid promotion before a file changes. | Fully meets - Document rules validate the prospective status before the storage workflow writes it. |
-| FR-004 | Partially meets - Authors can edit only status, but the workflow supplies no byte-preservation safeguard. | Fully meets - Targeted metadata updates preserve identity, date, path, body bytes, and unrelated YAML fields. |
+| FR-001 | Partially meets - Templates establish record structure, but contributors assign IDs and maintain directory conventions manually. | Fully meets - Record construction and storage enforce per-kind IDs, metadata, and fixed directories. |
+| FR-002 | Does not meet - Contributors must create the directories, adoption decision, and agent guidance themselves. | Fully meets - Initialization creates the adoption decision and skill, preserves existing records, and generates no specification. |
+| FR-003 | Does not meet - The workflow provides no automated check to reject an invalid promotion before a file changes. | Fully meets - Document rules validate the prospective status before the storage workflow writes it. |
+| FR-004 | Partially meets - Authors can edit status while preserving other content manually, but the workflow supplies no byte-preservation safeguard. | Fully meets - Targeted metadata updates preserve identity, date, path, body bytes, and unrelated YAML fields. |
 | FR-005 | Does not meet - Independent authors have no shared allocation lock or coordinated publication. | Fully meets - The filesystem adapter locks allocation and stages publication, as defined by ADR-0007 and ADR-0008. |
 | FR-006 | Does not meet - Authors must add metadata and headings themselves; there is no stdin-driven creation command. | Fully meets - The CLI accepts a title and piped body, and the core constructs a draft with metadata and a matching heading. |
 | FR-007 | Partially meets - Contributors can browse files, but no record-aware metadata listing is supplied. | Fully meets - The list command reports record IDs, statuses, and paths. |
-| FR-008 | Partially meets - Authors can change status text, but no tool enforces transitions or replacement eligibility. | Fully meets - Lifecycle rules reject invalid transitions and require an accepted same-kind replacement when superseding. |
-| NFR-001 | Does not meet - The manual workflow supplies no record-specific input limits or metadata-only listing. | Fully meets - Bounded reads enforce the documented limits, and catalog discovery reads metadata without document bodies. |
-| NFR-002 | Does not meet - The manual workflow supplies no reusable document-rule implementation or isolated storage boundary. | Fully meets - Core rules are I/O-free, use cases access storage through a port, and adapters handle filesystem and terminal effects. |
+| FR-008 | Partially meets - Authors can change status text, but the workflow does not enforce transitions or replacement eligibility. | Fully meets - Lifecycle rules reject invalid transitions and require an accepted same-kind replacement when superseding. |
+| NFR-001 | Does not meet - The workflow supplies no record-specific input limits or metadata-only listing. | Fully meets - Bounded reads enforce the documented limits, and catalog discovery reads metadata without document bodies. |
+| NFR-002 | Does not meet - The workflow supplies no reusable document-rule implementation or isolated storage boundary. | Fully meets - Core rules are I/O-free, use cases access storage through a port, and adapters handle filesystem and terminal effects. |
 | NFR-004 | Does not meet - The workflow supplies no record-management binary, CI checks, or release archives. | Fully meets - CI and release workflows define platform checks, native archives, and SHA-256 checksums. |
 | C-001 | FAIL - The workflow provides no standalone Rust binary. | PASS - One Cargo binary uses local files and the user cache without a service, database, or project configuration. |
-| C-002 | PASS - The local text-only workflow adds no network calls, content execution, telemetry, plugins, or updater. | PASS - The CLI has no network, provider, content-execution, telemetry, plugin, or automatic-update facilities. |
+| C-002 | PASS - The workflow uses Markdown templates and Git without network calls, content execution, telemetry, plugins, or automatic updates. | PASS - The CLI has no network, provider, content-execution, telemetry, plugin, or automatic-update facilities. |
 
 **Chosen option:** Makespec CLI
 
@@ -101,7 +101,7 @@ Preflight managed destinations, create both directories, stage files beside thei
 
 ### Validation and updates
 
-Parse front matter with `serde_yaml_ng` and headings/tables with `pulldown-cmark`. Validation checks metadata, matching title headings, ordered unique sections, canonical tables, criterion references, assessments, and option eligibility. It cannot judge prose quality or verify evidence.
+Parse front matter with `serde_yaml_ng` and headings/tables with `pulldown-cmark`. Validation checks metadata, matching title headings, ordered unique sections, canonical tables, criterion references, assessments, and option eligibility. Each comparison requires at least two options. `No change` is optional and should appear only when the current state is a meaningful alternative; when it is omitted, compare at least two distinct approaches that address the same need. Validation cannot judge prose quality or verify evidence.
 
 Choose validation depth from the document status. Before writing a promotion to proposed or accepted, validate the prospective document with its new status. Failed readiness checks and invalid transitions leave the original file unchanged.
 
