@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use super::{
     document::{
         Document, DocumentSummary, Kind, NewDocument, Status, parse_id, slugify, update_metadata,
-        validate_document,
+        validate_document, validate_document_structure,
     },
     error::{MakespecError, Result},
 };
@@ -57,7 +57,7 @@ pub(crate) trait ProjectStore {
     fn documents(&self) -> Result<Vec<Document>>;
     fn catalog(&self) -> Result<Vec<DocumentSummary>>;
     fn document(&self, id: &str) -> Result<Document>;
-    fn create_draft(&self, new_document: NewDocument) -> Result<Document>;
+    fn create_proposal(&self, new_document: NewDocument) -> Result<Document>;
     fn replace(&self, previous: &Document, replacement: &Document) -> Result<Document>;
 }
 
@@ -152,15 +152,15 @@ pub(crate) fn create(
         date: date.to_string(),
         body,
     };
-    let validation_document = new_document.build(1, Status::Draft)?;
+    let validation_document = new_document.build(1, Status::Proposed)?;
 
-    let errors = validate_document(&validation_document);
+    let errors = validate_document_structure(&validation_document);
 
     if !errors.is_empty() {
         return Err(structure_error("document structure is invalid", &errors));
     }
 
-    store.create_draft(new_document)
+    store.create_proposal(new_document)
 }
 
 pub(crate) fn list(store: &impl ProjectStore) -> Result<Vec<DocumentSummary>> {
@@ -442,7 +442,7 @@ An optional References section comes last. Link related decisions and specificat
 
 Functional requirements use unique `FR-001`-style IDs, and non-functional requirements use `NFR-001`-style IDs. Both use priority (MUST, SHOULD, or MAY). Constraints use unique `C-001` IDs. Options includes candidate descriptions and one comparison table with criteria in rows and options in columns. Include at least two options. Include No change only when it represents a meaningful current-state alternative; omit it when it would add no useful comparison, such as for a greenfield project with no existing capability. When omitting No change, compare at least two distinct approaches that address the same need. Requirement cells use `Does not meet`, `Partially meets`, or `Fully meets`, followed by ` - ` and evidence. Constraint cells use `PASS` or `FAIL`, followed by ` - ` and evidence. The chosen option must fully meet each MUST requirement and pass every constraint. Explain the choice using criterion IDs rather than an aggregate score.
 
-New records start as drafts. Draft specifications require Context, Requirements and constraints, and Options, including at least one functional requirement and a comparison table. Draft comparison cells and the chosen option may remain blank, and Design and Adoption may be omitted. Before promotion to proposed, complete the five sections, assess every criterion for every option, select an eligible option, and replace template placeholders. Proposed records may return to draft for rework or proceed to accepted or rejected. Drafts may also be rejected. Accepted records may become deprecated or superseded.
+New records start as proposed. Creation checks the initial structure, including at least one functional requirement and a comparison table. Checking a proposal requires all five sections, an assessment of every criterion for every option, an eligible chosen option, and no template placeholders. Incomplete proposals fail checking and cannot be accepted. Proposed records may become accepted or rejected. Accepted records may become deprecated or superseded.
 
 Design describes only the chosen option, including behavior, examples, and failure cases. Add a Risks and mitigations subsection when material risks need explanation. Adoption covers rollout, compatibility, and verification, with migration or rollback when relevant.
 
@@ -452,22 +452,25 @@ Comparison labels require supporting evidence; the CLI checks structure and elig
 
 ## Adoption
 
-Create drafts from the bundled template and run `makespec check` after edits. Complete a draft before promoting it to proposed, then request acceptance after review. Verify adoption by exercising the draft-to-proposed-to-accepted workflow."#
+Create proposals from the bundled template and run `makespec check` after edits. Resolve missing information and validation errors, then request acceptance after review. Verify adoption by exercising creation, checking an incomplete proposal, completing it, and accepting it."#
     }
 
-    const DRAFT_SPECIFICATION_BODY: &str = "## Context\n\nLet users search local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Search records by title. |\n\n## Options\n\n| Criterion ID | No change | Local search |\n| --- | --- | --- |\n| FR-001 | | |\n\n**Chosen option:**";
+    const INCOMPLETE_SPECIFICATION_BODY: &str = "## Context\n\nLet users search local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Search records by title. |\n\n## Options\n\n| Criterion ID | No change | Local search |\n| --- | --- | --- |\n| FR-001 | | |\n\n**Chosen option:**";
 
     #[test]
-    fn specification_drafts_can_be_unfinished_and_need_only_functional_criteria() {
-        let draft = specification(DRAFT_SPECIFICATION_BODY, Status::Draft);
+    fn incomplete_proposals_pass_creation_structure_but_fail_readiness_checks() {
+        let proposal = specification(INCOMPLETE_SPECIFICATION_BODY, Status::Proposed);
 
-        assert!(validate_document(&draft).is_empty());
+        assert!(validate_document_structure(&proposal).is_empty());
         assert!(
-            validate_document(&specification(DRAFT_SPECIFICATION_BODY, Status::Rejected))
-                .is_empty()
+            validate_document(&specification(
+                INCOMPLETE_SPECIFICATION_BODY,
+                Status::Rejected
+            ))
+            .is_empty()
         );
 
-        let errors = validate_document(&specification(DRAFT_SPECIFICATION_BODY, Status::Proposed));
+        let errors = validate_document(&proposal);
 
         for expected in [
             "`## Design`",
@@ -481,7 +484,7 @@ Create drafts from the bundled template and run `makespec check` after edits. Co
             );
         }
 
-        let body = DRAFT_SPECIFICATION_BODY
+        let body = INCOMPLETE_SPECIFICATION_BODY
             .replace(
                 "| FR-001 | | |",
                 "| FR-001 | Does not meet - No search exists. | Fully meets - Search matches titles. |",
@@ -494,7 +497,7 @@ Create drafts from the bundled template and run `makespec check` after edits. Co
     }
 
     #[test]
-    fn specification_drafts_still_reject_inconsistent_comparison_structure() {
+    fn creation_rejects_inconsistent_comparison_structure() {
         for (original, replacement, expected) in [
             (
                 "| Criterion ID | No change | Local search |\n| --- | --- | --- |\n| FR-001 | | |",
@@ -533,8 +536,8 @@ Create drafts from the bundled template and run `makespec check` after edits. Co
                 "template order",
             ),
         ] {
-            let body = DRAFT_SPECIFICATION_BODY.replace(original, replacement);
-            let errors = validate_document(&specification(&body, Status::Draft));
+            let body = INCOMPLETE_SPECIFICATION_BODY.replace(original, replacement);
+            let errors = validate_document_structure(&specification(&body, Status::Proposed));
 
             assert!(
                 errors.iter().any(|error| error.contains(expected)),
@@ -569,7 +572,7 @@ Create drafts from the bundled template and run `makespec check` after edits. Co
     }
 
     #[test]
-    fn template_drafts_are_valid_but_require_completion_before_review() {
+    fn templates_pass_creation_structure_but_require_completion() {
         for (kind, body) in [
             (
                 Kind::Decision,
@@ -587,7 +590,8 @@ Create drafts from the bundled template and run `makespec check` after edits. Co
                 date: "2026-11-09".into(),
                 body: body.into(),
             };
-            let errors = validate_document(&new_document.build(1, Status::Draft).unwrap());
+            let errors =
+                validate_document_structure(&new_document.build(1, Status::Proposed).unwrap());
 
             assert!(errors.is_empty(), "{errors:?}");
             assert!(
@@ -665,7 +669,7 @@ Create drafts from the bundled template and run `makespec check` after edits. Co
             .is_empty()
         );
 
-        for (original, replacement, expected, valid_draft) in [
+        for (original, replacement, expected, valid_structure) in [
             (
                 "Fully meets - The format requires functionality criteria, constraints, and comparisons.",
                 "Does not meet - The format requires functionality criteria, constraints, and comparisons.",
@@ -699,8 +703,8 @@ Create drafts from the bundled template and run `makespec check` after edits. Co
                 "{errors:?}"
             );
             assert_eq!(
-                validate_document(&specification(&body, Status::Draft)).is_empty(),
-                valid_draft
+                validate_document_structure(&specification(&body, Status::Proposed)).is_empty(),
+                valid_structure
             );
         }
     }

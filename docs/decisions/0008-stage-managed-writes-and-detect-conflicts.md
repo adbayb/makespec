@@ -28,4 +28,4 @@ Initialization is not a multi-file transaction. Advisory locks coordinate Makesp
 ## References
 
 - [Filesystem adapter](../../src/adapters/filesystem.rs) implements staging, exclusive creation, replacement checks, and rollback.
-- [Core workflows](../../src/core/service.rs) validate initialization and proposed status changes before publication.
+- [Core workflows](../../src/core/service.rs) validate initialization and acceptance before publication.

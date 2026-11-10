@@ -25,7 +25,7 @@ Keep this subsection only for genuine hard boundaries, such as a required platfo
 
 Describe each candidate and its baseline. Include at least two options. Include `No change` only when it represents a meaningful current-state alternative; omit it when it would add no useful comparison, such as for a greenfield project with no existing capability. When omitting `No change`, compare at least two distinct approaches that address the same need. Name options in the column headers and compare them against the same criteria. Include one row for each requirement and constraint ID; remove rows for criteria you omit above.
 
-Leave unassessed cells blank while the specification is a draft. Before promoting it to proposed, fill each cell with `LABEL - explanation` and supporting evidence:
+Fill each cell with `LABEL - explanation` and supporting evidence. Label assumptions and distinguish expected behavior from verified results:
 
 - Requirements: `Does not meet`, `Partially meets`, or `Fully meets`.
 - Constraints: `PASS` or `FAIL`.
@@ -38,11 +38,11 @@ Leave unassessed cells blank while the specification is a draft. Before promotin
 
 **Chosen option:**
 
-Leave the choice blank while it is under discussion. Before promotion to proposed, name an option from the table that fully meets every MUST requirement and passes every constraint. Explain the choice and its tradeoffs using criterion IDs. Do not calculate an aggregate score.
+Name an option from the table that fully meets every MUST requirement and passes every constraint. Explain the choice and its tradeoffs using criterion IDs. Do not calculate an aggregate score.
 
 ## Design
 
-Replace with the chosen option's behavior and interfaces, including failure cases, in enough detail to implement it. Include examples beside the behavior they illustrate. Drafts may omit this section until an option is chosen.
+Replace with the chosen option's behavior and interfaces, including failure cases, in enough detail to implement it. Include examples beside the behavior they illustrate.
 
 ### Risks and mitigations
 
@@ -50,11 +50,11 @@ Describe material risks and how to address them. Remove this optional subsection
 
 ## Adoption
 
-Replace with rollout, compatibility, and verification steps. Include migration or rollback when relevant to the functionality. Drafts may omit this section.
+Replace with rollout, compatibility, and verification steps. Include migration or rollback when relevant to the functionality.
 
 ## Open questions
 
-List remaining questions and how to resolve them. Resolve questions that prevent a supported choice or implementable design before promotion to proposed. Remove this optional section when no questions remain.
+List remaining questions and how to resolve them. Ask the user about gaps that prevent a supported choice or implementable design, or document reasonable assumptions for review. Remove this optional section when no questions remain.
 
 ## References
 

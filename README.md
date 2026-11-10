@@ -60,7 +60,7 @@ makespec check
 
 ### 3. Create and review a record manually
 
-Pass a Markdown body to `new` on stdin, omitting front matter and the ID/title heading. New records start as drafts:
+Pass a Markdown body to `new` on stdin, omitting front matter and the ID/title heading. New records start as `proposed`:
 
 ```sh
 makespec new decision "Keep pull requests focused" <<'EOF'
@@ -79,7 +79,6 @@ EOF
 
 makespec check
 makespec list
-makespec status ADR-0002 proposed
 makespec status ADR-0002 accepted
 ```
 
@@ -103,7 +102,9 @@ Open your initialized project in an AI coding harness such as GitHub Copilot, Cl
 /makespec Create an iOS application that lets users track their daily habits.
 ```
 
-The agent uses Makespec to create an RFC-format specification in `docs/specifications/` and promote it to `proposed` once complete. If requirements or decisions are missing, it keeps a draft until you resolve them.
+The agent asks questions to refine missing requirements or states reasonable assumptions for your review, then uses Makespec to create a complete RFC-format specification in `docs/specifications/` with status `proposed`. In a fresh project, the first specification is `RFC-0001`, independent of the adoption decision `ADR-0001`. The agent must use the ID returned by the CLI.
+
+An incomplete proposal fails `makespec check` and cannot be accepted until you resolve its validation errors. The CLI has no `draft` status. A passing check confirms structure and completeness rules, not the truth of assumptions or evidence.
 
 Review the specification. Edit it yourself or ask the agent to revise it, or keep it as written. Once you approve it, validate the records and accept it:
 
@@ -130,9 +131,9 @@ Implement the specification @docs/specifications/<spec-file>
 | --- | --- |
 | `makespec`, `makespec --help`, or `makespec -h` | Print help. |
 | `makespec init` | Bootstrap records and the agent skill in the current directory. |
-| `makespec new <decision\|specification> "Title"` | Read a Markdown body from stdin and create a draft. |
+| `makespec new <decision\|specification> "Title"` | Read a Markdown body from stdin and create a proposal. |
 | `makespec list` | List all records and their statuses. |
-| `makespec status ID STATUS [REPLACEMENT_ID]` | Promote a draft, return a proposal to draft, accept, reject, deprecate, or supersede a record. |
+| `makespec status ID STATUS [REPLACEMENT_ID]` | Accept, reject, deprecate, or supersede a record. |
 | `makespec check` | Validate front matter, document structure, filenames, lifecycle links, and specification comparison tables. |
 
 Use `makespec --help` or `makespec <command> --help` for command details.
@@ -145,7 +146,7 @@ Use `makespec --help` or `makespec <command> --help` for command details.
 
 `makespec init` installs the [Makespec skill](.agents/skills/makespec/SKILL.md) and its references under `.agents/skills/makespec/`. Use an agent that discovers this directory, and put the binary on that agent's `PATH`.
 
-The skill guides agents from authorized creation to checked, `proposed` records, keeping drafts for unfinished work. Read its [workflow](.agents/skills/makespec/SKILL.md#workflow) for planning and approval boundaries. Acceptance requires your approval.
+The skill guides agents from clarifying requirements to complete, checked, `proposed` records. Read its [workflow](.agents/skills/makespec/SKILL.md#workflow) for planning and approval boundaries. Acceptance requires your approval.
 
 ### Used technologies
 
@@ -168,7 +169,7 @@ flowchart LR
     Filesystem --> Records["Markdown records"]
 ```
 
-Each document kind has its own incrementing IDs. Records contain a date and use YAML front matter as the sole status source. You can review and version the files in Git.
+Each document kind has its own incrementing IDs. Cached counters retain earlier allocations at the same project path, even if you remove records; failed writes can leave gaps. Records contain a date and use YAML front matter as the sole status source. You can review and version the files in Git.
 
 Makespec validates paths and metadata, limits document input to 2 MiB, uses exclusive creation, and checks for external edits before replacing files. It keeps ID allocation locks outside the repository. Advisory locks coordinate Makespec processes but cannot control external editors.
 

@@ -481,7 +481,7 @@ impl ProjectStore for FilesystemStore {
         parse_document(&content, summary.path)
     }
 
-    fn create_draft(&self, new_document: NewDocument) -> Result<Document> {
+    fn create_proposal(&self, new_document: NewDocument) -> Result<Document> {
         self.with_lock(|state_path| {
             let documents = self.catalog()?;
             let mut counters = self.read_counters(state_path)?;
@@ -507,7 +507,7 @@ impl ProjectStore for FilesystemStore {
             *current = number;
             self.write_counters(state_path, &counters)?;
 
-            let document = new_document.build(number, Status::Draft)?;
+            let document = new_document.build(number, Status::Proposed)?;
             let destination = self.ensure_safe_parent(&document.path, false)?;
             let temp = stage_file(&destination, &document.raw)?;
 

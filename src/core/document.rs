@@ -61,7 +61,6 @@ impl std::fmt::Display for Kind {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Status {
-    Draft,
     Proposed,
     Accepted,
     Rejected,
@@ -70,8 +69,7 @@ pub enum Status {
 }
 
 impl Status {
-    pub const ALL: [Self; 6] = [
-        Self::Draft,
+    pub const ALL: [Self; 5] = [
         Self::Proposed,
         Self::Accepted,
         Self::Rejected,
@@ -81,7 +79,6 @@ impl Status {
 
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Draft => "draft",
             Self::Proposed => "proposed",
             Self::Accepted => "accepted",
             Self::Rejected => "rejected",
@@ -93,11 +90,7 @@ impl Status {
     pub fn can_transition_to(self, next: Self) -> bool {
         matches!(
             (self, next),
-            (Self::Draft, Self::Proposed | Self::Rejected)
-                | (
-                    Self::Proposed,
-                    Self::Draft | Self::Accepted | Self::Rejected
-                )
+            (Self::Proposed, Self::Accepted | Self::Rejected)
                 | (Self::Accepted, Self::Deprecated | Self::Superseded)
                 | (Self::Deprecated, Self::Superseded)
         )
@@ -113,7 +106,7 @@ impl std::str::FromStr for Status {
             .find(|status| status.as_str().eq_ignore_ascii_case(value))
             .ok_or_else(|| {
                 MakespecError::Invalid(format!(
-                    "unknown status `{value}`; expected draft, proposed, accepted, rejected, deprecated, or superseded"
+                    "unknown status `{value}`; expected proposed, accepted, rejected, deprecated, or superseded"
                 ))
             })
     }
@@ -438,11 +431,18 @@ pub fn update_metadata(document: &Document, metadata: Metadata) -> Result<Docume
 }
 
 pub fn validate_document(document: &Document) -> Vec<String> {
+    validate(document, document.metadata.status != Status::Rejected)
+}
+
+pub(crate) fn validate_document_structure(document: &Document) -> Vec<String> {
+    validate(document, false)
+}
+
+fn validate(document: &Document, complete: bool) -> Vec<String> {
     let Ok((kind, _)) = document.metadata.validate() else {
         return vec!["invalid document metadata".into()];
     };
 
-    let complete = !matches!(document.metadata.status, Status::Draft | Status::Rejected);
     let headings = collect_headings(&document.body);
     let mut errors = Vec::new();
     let expected_title = format!("{}: {}", document.metadata.id, document.metadata.title);
@@ -987,10 +987,8 @@ mod tests {
 
     #[test]
     fn status_transitions_follow_the_lifecycle() {
-        assert!(Status::Draft.can_transition_to(Status::Proposed));
-        assert!(Status::Draft.can_transition_to(Status::Rejected));
-        assert!(!Status::Draft.can_transition_to(Status::Accepted));
-        assert!(Status::Proposed.can_transition_to(Status::Draft));
+        assert!("draft".parse::<Status>().is_err());
+        assert!(Status::Proposed.can_transition_to(Status::Rejected));
         assert!(Status::Proposed.can_transition_to(Status::Accepted));
         assert!(Status::Accepted.can_transition_to(Status::Superseded));
         assert!(!Status::Accepted.can_transition_to(Status::Rejected));
@@ -1095,15 +1093,15 @@ mod tests {
             date: "2026-11-09".into(),
             body: String::new(),
         };
-        let overhead = document.build(9999, Status::Draft).unwrap().raw.len();
+        let overhead = document.build(9999, Status::Proposed).unwrap().raw.len();
 
         document.body = "x".repeat(MAX_DOCUMENT_BYTES as usize - overhead);
 
         assert_eq!(
-            document.build(9999, Status::Draft).unwrap().raw.len(),
+            document.build(9999, Status::Proposed).unwrap().raw.len(),
             MAX_DOCUMENT_BYTES as usize
         );
-        assert!(document.build(10_000, Status::Draft).is_err());
+        assert!(document.build(10_000, Status::Proposed).is_err());
     }
 
     #[test]

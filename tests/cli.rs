@@ -7,7 +7,7 @@ use std::{
 use tempfile::{TempDir, tempdir};
 
 const DECISION_BODY: &str = "## Context\n\nThe project needs a focused decision.\n\n## Decision\n\nUse the proposed approach.\n\n## Consequences\n\nThe decision remains in Git.";
-const SPECIFICATION_BODY: &str = "## Context\n\nCompare approaches to record management.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Compare record management approaches. |\n\n## Options\n\n| Criterion ID | Markdown templates | Makespec CLI |\n| --- | --- | --- |\n| FR-001 | | |\n\n**Chosen option:**";
+const SPECIFICATION_BODY: &str = "## Context\n\nCompare approaches to record management.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Compare record management approaches. |\n\n## Options\n\n| Criterion ID | Markdown templates | Makespec CLI |\n| --- | --- | --- |\n| FR-001 | Partially meets - Authors compare records manually. | Fully meets - The CLI validates comparisons. |\n\n**Chosen option:** Makespec CLI\n\n## Design\n\nValidate record comparisons locally.\n\n## Adoption\n\nVerify the check command against sample records.";
 
 #[test]
 fn list_reports_an_empty_catalog() {
@@ -109,6 +109,7 @@ fn cli_initializes_creates_lists_changes_status_and_checks() {
         "{}",
         String::from_utf8_lossy(&created_specification.stderr)
     );
+    assert!(String::from_utf8_lossy(&created_specification.stdout).contains("RFC-0001"));
 
     let listed = run(project.path(), &["list"]);
     let listed_text = String::from_utf8_lossy(&listed.stdout);
@@ -117,7 +118,7 @@ fn cli_initializes_creates_lists_changes_status_and_checks() {
     assert!(listed_text.contains("Decisions (2)"));
     assert!(listed_text.contains("Specifications (1)"));
     assert!(listed_text.contains("ADR-0002  Document a focused choice"));
-    assert!(listed_text.contains("Status: draft  Date: "));
+    assert!(listed_text.contains("Status: proposed  Date: "));
     assert!(listed_text.contains("Path: docs/decisions/0002-document-a-focused-choice.md"));
     assert!(listed_text.contains("RFC-0001  Compare record management approaches"));
     assert!(!listed_text.contains('\t'));
@@ -251,7 +252,7 @@ fn invalid_document_body_is_rejected_without_writing_a_record() {
 }
 
 #[test]
-fn specification_drafts_require_completion_before_review_and_acceptance() {
+fn incomplete_proposals_fail_check_and_cannot_be_accepted_until_completed() {
     let project = initialized_project();
 
     let body = "## Context\n\nSearch local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Find records by title. |\n\n## Options\n\n| Criterion ID | No change | Search |\n| --- | --- | --- |\n| FR-001 | | |\n\n**Chosen option:**";
@@ -268,19 +269,34 @@ fn specification_drafts_require_completion_before_review_and_acceptance() {
     let path = project
         .path()
         .join("docs/specifications/0001-local-search.md");
-    let draft = std::fs::read_to_string(&path).unwrap();
+    let proposal = std::fs::read_to_string(&path).unwrap();
 
-    assert!(draft.contains("status: draft\n"));
-    assert!(run(project.path(), &["check"]).status.success());
+    assert!(proposal.contains("status: proposed\n"));
 
-    for next in ["accepted", "proposed"] {
-        let result = run(project.path(), &["status", "RFC-0001", next]);
+    let checked = run(project.path(), &["check"]);
 
-        assert!(!result.status.success());
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), draft);
+    assert!(!checked.status.success());
+    for expected in [
+        "`## Design`",
+        "`## Adoption`",
+        "chosen option",
+        "label and explanation",
+    ] {
+        assert!(String::from_utf8_lossy(&checked.stderr).contains(expected));
     }
 
-    let completed = draft
+    let result = run(project.path(), &["status", "RFC-0001", "accepted"]);
+
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("cannot set RFC-0001 to accepted"));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), proposal);
+
+    let removed_status = run(project.path(), &["status", "RFC-0001", "draft"]);
+
+    assert_eq!(removed_status.status.code(), Some(2));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), proposal);
+
+    let completed = proposal
         .replace(
             "| FR-001 | | |",
             "| FR-001 | Does not meet - No search exists. | Fully meets - Query matches titles. |",
@@ -290,7 +306,9 @@ fn specification_drafts_require_completion_before_review_and_acceptance() {
 
     std::fs::write(&path, &completed).unwrap();
 
-    for next in ["proposed", "draft", "proposed", "accepted"] {
+    assert!(run(project.path(), &["check"]).status.success());
+
+    for next in ["proposed", "accepted"] {
         let result = run(project.path(), &["status", "RFC-0001", next]);
 
         assert!(
@@ -300,9 +318,10 @@ fn specification_drafts_require_completion_before_review_and_acceptance() {
         );
     }
 
-    let rejected_draft = create(project.path(), "specification", "Another search", body);
+    let rejected_proposal = create(project.path(), "specification", "Another search", body);
 
-    assert!(rejected_draft.status.success());
+    assert!(rejected_proposal.status.success());
+    assert!(String::from_utf8_lossy(&rejected_proposal.stdout).contains("RFC-0002"));
 
     let rejected = run(project.path(), &["status", "RFC-0002", "rejected"]);
 
@@ -320,7 +339,7 @@ fn specification_drafts_require_completion_before_review_and_acceptance() {
 
     std::fs::write(
         &path,
-        completed.replace("status: draft", "status: accepted"),
+        completed.replace("status: proposed", "status: accepted"),
     )
     .unwrap();
 
@@ -339,7 +358,7 @@ fn terminal_output_escapes_controls_in_titles_and_errors() {
 
     std::fs::write(
         project.path().join("docs/decisions/0002-untrusted-title.md"),
-        "---\nid: ADR-0002\ntitle: \"Unsafe\\u001b[2J title\"\ndate: 2026-11-09\nstatus: draft\n---\n",
+        "---\nid: ADR-0002\ntitle: \"Unsafe\\u001b[2J title\"\ndate: 2026-11-09\nstatus: proposed\n---\n",
     ).unwrap();
 
     let listed = run(project.path(), &["list"]);

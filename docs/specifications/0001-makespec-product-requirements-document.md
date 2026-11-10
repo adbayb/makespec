@@ -28,7 +28,7 @@ Scope covers local creation, discovery, validation, lifecycle management, safe s
 | FR-003 | MUST | Validate records at the depth required by their status and reject invalid promotions before changing files. |
 | FR-004 | MUST | Preserve record identity, date, path, body bytes, and unrelated YAML fields during status changes. |
 | FR-005 | MUST | Coordinate ID allocation and file publication between concurrent Makespec processes. |
-| FR-006 | MUST | Create draft records from a title and body-only UTF-8 stdin, adding metadata and the title heading without interactive prompts. |
+| FR-006 | MUST | Create proposed records from a title and body-only UTF-8 stdin, adding metadata and the title heading without interactive prompts. Allow incomplete proposals to remain proposed while checking reports readiness errors and acceptance rejects them. |
 | FR-007 | MUST | List all managed records with their IDs, statuses, and paths so users and agents can find them. |
 | FR-008 | MUST | Apply the documented lifecycle through explicit status commands, including supersession by a different accepted record of the same kind. |
 | NFR-001 | MUST | Bound managed input sizes and list metadata without loading document bodies. |
@@ -56,7 +56,7 @@ This specification compares two ways to manage project records: a template-drive
 | FR-003 | Does not meet - The workflow provides no automated check to reject an invalid promotion before a file changes. | Fully meets - Document rules validate the prospective status before the storage workflow writes it. |
 | FR-004 | Partially meets - Authors can edit status while preserving other content manually, but the workflow supplies no byte-preservation safeguard. | Fully meets - Targeted metadata updates preserve identity, date, path, body bytes, and unrelated YAML fields. |
 | FR-005 | Does not meet - Independent authors have no shared allocation lock or coordinated publication. | Fully meets - The filesystem adapter locks allocation and stages publication, as defined by ADR-0007 and ADR-0008. |
-| FR-006 | Does not meet - Authors must add metadata and headings themselves; there is no stdin-driven creation command. | Fully meets - The CLI accepts a title and piped body, and the core constructs a draft with metadata and a matching heading. |
+| FR-006 | Does not meet - Authors must add metadata and headings themselves; there is no stdin-driven creation command. | Fully meets - The CLI constructs a proposal from a title and piped body, checks initial structure on creation, and requires complete content for checking and acceptance. |
 | FR-007 | Partially meets - Contributors can browse files, but no record-aware metadata listing is supplied. | Fully meets - The list command reports record IDs, statuses, and paths. |
 | FR-008 | Partially meets - Authors can change status text, but the workflow does not enforce transitions or replacement eligibility. | Fully meets - Lifecycle rules reject invalid transitions and require an accepted same-kind replacement when superseding. |
 | NFR-001 | Does not meet - The workflow supplies no record-specific input limits or metadata-only listing. | Fully meets - Bounded reads enforce the documented limits, and catalog discovery reads metadata without document bodies. |
@@ -103,7 +103,9 @@ Preflight managed destinations, create both directories, stage files beside thei
 
 Parse front matter with `serde_yaml_ng` and headings/tables with `pulldown-cmark`. Validation checks metadata, matching title headings, ordered unique sections, canonical tables, criterion references, assessments, and option eligibility. Each comparison requires at least two options. `No change` is optional and should appear only when the current state is a meaningful alternative; when it is omitted, compare at least two distinct approaches that address the same need. Validation cannot judge prose quality or verify evidence.
 
-Choose validation depth from the document status. Before writing a promotion to proposed or accepted, validate the prospective document with its new status. Failed readiness checks and invalid transitions leave the original file unchanged.
+New records start as proposed; there is no draft status. Creation checks initial structure and permits incomplete content. Checking requires complete proposals, and acceptance validates the prospective document before writing. Rejected records receive structural checks. Failed readiness checks and invalid transitions leave the original file unchanged.
+
+Agents clarify missing requirements before authoring, preferably by asking the user focused questions. If clarification is unavailable, they may choose reasonable defaults and label assumptions for review. They must not invent facts or evidence to pass validation. A failing check signals unfinished work; a passing check does not establish the truth of the content.
 
 Supersession records `superseded_by` only on the old record. Require a different, accepted replacement of the same kind when applying the transition. Historical targets may later become deprecated or superseded; `check` rejects missing or invalid targets and cycles.
 
@@ -140,7 +142,7 @@ Install a verified native binary or build from source using the README. Put the 
 
 Create records for the project's actual decisions and functionality. Use ordinary workspace tools for prose, the templates for structure, and the installed skill for authoring and approval boundaries. Initialization does not require a companion specification.
 
-Existing records must follow the fixed directories and current format. Initialization preserves valid records and matching installed files; it does not convert arbitrary Markdown or overwrite conflicts. Resolve reported conflicts explicitly before retrying.
+Existing records must follow the fixed directories and current format. For records from older versions with `status: draft`, change the front matter to `status: proposed`, then check and complete them. Initialization preserves valid records and matching installed files; it does not convert arbitrary Markdown or overwrite conflicts. Resolve reported conflicts explicitly before retrying.
 
 Verify adoption by creating and listing records, checking a complete proposal, and applying an authorized status change. Confirm that invalid promotions leave the original record unchanged. Run `makespec check` before contributing record changes. Maintainers run the contribution checks, with unit and CLI tests covering initialization, validation, concurrent allocation, status preservation, and bounded discovery.
 
