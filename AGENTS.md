@@ -1,4 +1,4 @@
-# Contributor instructions
+# AGENTS.md
 
 ## Rust readability
 
@@ -17,6 +17,12 @@
   passes. Formatting-only changes must not rename or restructure code.
 - Run `cargo fmt` after editing. It maintains formatting but does not enforce
   logical grouping; check that during review.
+
+## Bundled skill metadata
+
+- Version `.agents/skills/makespec/` independently from the Cargo package, starting at `1.0.0`.
+- Bump `metadata.version` by patch for wording-only edits, minor for added or changed behavior rules and references, and major for removed or renamed rules, workflows, or prerequisites.
+- Keep the version in the bundled skill source; `makespec init` embeds that source.
 
 ## Checks
 

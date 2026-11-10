@@ -36,9 +36,9 @@ Fill each cell with `LABEL - explanation` and supporting evidence. Label assumpt
 | NFR-001 | | |
 | C-001 | | |
 
-**Chosen option:**
+**Chosen option:** Proposed approach
 
-Name an option from the table that fully meets every MUST requirement and passes every constraint. Explain the choice and its tradeoffs using criterion IDs. Do not calculate an aggregate score.
+Choose an option that fully meets every MUST requirement and passes every constraint. Replace `Proposed approach` with its name copied exactly from the table. Explain the choice and its tradeoffs using criterion IDs. Do not calculate an aggregate score.
 
 ## Design
 

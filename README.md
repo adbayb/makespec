@@ -102,11 +102,11 @@ Open your initialized project in an AI coding harness such as GitHub Copilot, Cl
 /makespec Create an iOS application that lets users track their daily habits.
 ```
 
-The agent asks questions to refine missing requirements or states reasonable assumptions for your review, then uses Makespec to create a complete RFC-format specification in `docs/specifications/` with status `proposed`. In a fresh project, the first specification is `RFC-0001`, independent of the adoption decision `ADR-0001`. The agent must use the ID returned by the CLI.
+The agent uses the Makespec workflow to refine requirements and create a proposed RFC-format specification in `docs/specifications/`. In a fresh project, the first specification is `RFC-0001`, independent of the adoption decision `ADR-0001`. Read the skill workflow for the agent's record-authoring and status boundaries.
 
 An incomplete proposal fails `makespec check` and cannot be accepted until you resolve its validation errors. The CLI has no `draft` status. A passing check confirms structure and completeness rules, not the truth of assumptions or evidence.
 
-Review the specification. Edit it yourself or ask the agent to revise it, or keep it as written. Once you approve it, validate the records and accept it:
+Review the specification. Edit it yourself or ask the agent to revise it, or keep it as written. To accept it, validate the records and run:
 
 ```sh
 makespec check
@@ -146,7 +146,7 @@ Use `makespec --help` or `makespec <command> --help` for command details.
 
 `makespec init` installs the [Makespec skill](.agents/skills/makespec/SKILL.md) and its references under `.agents/skills/makespec/`. Use an agent that discovers this directory, and put the binary on that agent's `PATH`.
 
-The skill guides agents from clarifying requirements to complete, checked, `proposed` records. Read its [workflow](.agents/skills/makespec/SKILL.md#workflow) for planning and approval boundaries. Acceptance requires your approval.
+The skill guides agents through project-record work. Read its [workflow](.agents/skills/makespec/SKILL.md#workflow) for planning and record-operation boundaries.
 
 ### Used technologies
 

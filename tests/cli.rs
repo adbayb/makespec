@@ -10,6 +10,44 @@ const DECISION_BODY: &str = "## Context\n\nThe project needs a focused decision.
 const SPECIFICATION_BODY: &str = "## Context\n\nCompare approaches to record management.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Compare record management approaches. |\n\n## Options\n\n| Criterion ID | Markdown templates | Makespec CLI |\n| --- | --- | --- |\n| FR-001 | Partially meets - Authors compare records manually. | Fully meets - The CLI validates comparisons. |\n\n**Chosen option:** Makespec CLI\n\n## Design\n\nValidate record comparisons locally.\n\n## Adoption\n\nVerify the check command against sample records.";
 
 #[test]
+fn specification_template_chosen_option_passes_cli_validation() {
+    let project = initialized_project();
+    let template = include_str!("../.agents/skills/makespec/references/specification-template.md");
+    let chosen_option = template
+        .lines()
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix("**Chosen option:**")
+                .map(str::trim)
+        })
+        .expect("template must include a chosen-option line");
+
+    assert!(!chosen_option.is_empty());
+
+    let body = SPECIFICATION_BODY.replace("Makespec CLI", chosen_option);
+    let created = create(
+        project.path(),
+        "specification",
+        "Compare record management approaches",
+        &body,
+    );
+
+    assert!(
+        created.status.success(),
+        "{}",
+        String::from_utf8_lossy(&created.stderr)
+    );
+
+    let checked = run(project.path(), &["check"]);
+
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+}
+
+#[test]
 fn list_reports_an_empty_catalog() {
     let project = tempdir().unwrap();
     std::fs::create_dir_all(project.path().join("docs/decisions")).unwrap();
