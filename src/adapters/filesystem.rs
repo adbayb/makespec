@@ -1,4 +1,5 @@
 use std::{
+    fmt::Write as _,
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Component, Path, PathBuf},
@@ -114,7 +115,11 @@ impl FilesystemStore {
             .to_str()
             .ok_or_else(|| MakespecError::Invalid("project path must be valid Unicode".into()))?;
         let digest = Sha256::digest(identity.as_bytes());
-        let name = format!("{digest:x}");
+        let mut name = String::with_capacity(digest.len() * 2);
+
+        for byte in &digest {
+            write!(name, "{byte:02x}").expect("writing to a String cannot fail");
+        }
 
         Ok((
             directory.join(format!("{name}.lock")),
