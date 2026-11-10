@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.0](https://github.com/adbayb/makespec/compare/v0.1.1...v0.2.0) (2026-11-10)
+
+
+### Features
+
+* make no-change option optional for greenfield projects ([39ee809](https://github.com/adbayb/makespec/commit/39ee8094ffbd0c49dd6a1cc85bc1c4cc0d9403dd))
+* refresh list command output to make it clearer ([d960223](https://github.com/adbayb/makespec/commit/d9602234d47c6813689dc6d4ac897a50e3021320))
+
+
+### Bug Fixes
+
+* remove unneeded dependencies ([b03713a](https://github.com/adbayb/makespec/commit/b03713aa4f0b2dc360b282a4174e382182a0890e))
+* update dependencies ([9100cf3](https://github.com/adbayb/makespec/commit/9100cf3ca36e8a81040db8378e44878eb2b246b5))
+
 ## [0.1.1](https://github.com/adbayb/makespec/compare/v0.1.0...v0.1.1) (2026-11-09)
 
 
