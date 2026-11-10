@@ -1,19 +1,18 @@
 <div align="center">
     <h1>Makespec</h1>
-    <strong>Record focused decisions and specify functionality in Markdown.</strong>
+    <strong>A CLI to create, manage, and evolve product & tech decisions and specifications. Craft ADRs. Shape RFCs. Build better software.</strong>
 </div>
 <br>
 <br>
 
 ## ✨ Features
 
-- Record small, focused decisions and write functionality specifications, including product requirements documents (PRDs).
+- Record small, focused decisions in architecture decision record (ADR) format and write functionality specifications, including product requirements documents (PRDs), in request for comments (RFC) format.
 - Compare specification alternatives against functional requirements (FR), non-functional requirements (NFR), and constraints using qualitative labels and PASS/FAIL gates.
 - Create proposals, list records, and change status through five CLI commands.
 - Keep dated, numbered records in `docs/decisions/` and `docs/specifications/`, and check their structure with `makespec check`.
 - Give coding agents the bundled skill so they can create and manage records through the CLI.
-
-Decisions follow the architecture decision record (ADR) format; specifications follow the request for comments (RFC) format. Makespec runs locally with a standalone Rust binary. It makes no network or LLM-provider calls and collects no telemetry.
+- Run locally with a standalone Rust binary: it makes no network or LLM-provider calls and collects no telemetry.
 
 <br>
 
@@ -59,7 +58,7 @@ makespec check
 
 `init` creates both document directories, an accepted "Use Makespec to manage decisions and specifications" decision, and the skill with its templates and command reference under `.agents/skills/makespec/`. When no specifications exist, it adds an empty `docs/specifications/.gitkeep` so Git can track the directory. It creates no specification and preserves existing records. Run all commands from your project root.
 
-### 3. Create and review a decision
+### 3. Create and review a record manually
 
 Pass a Markdown body to `new` on stdin, omitting front matter and the ID/title heading. New records start as drafts:
 
@@ -95,6 +94,35 @@ Get-Content -Raw decision.md | makespec new decision "Keep pull requests focused
 For a specification, use `new specification` and follow the [specification template](.agents/skills/makespec/references/specification-template.md).
 
 Edit records with your editor or agent tools, preserving IDs and dates, then run `makespec check`. See the [command reference](.agents/skills/makespec/references/cli.md) for lifecycle and completion rules.
+
+### 3 (alternative). Specify and implement your project with an AI coding harness
+
+Open your initialized project in an AI coding harness such as GitHub Copilot, Claude Code, or Codex that supports the installed skill. If your harness exposes skills as slash commands, invoke `/makespec` followed by your project idea:
+
+```text
+/makespec Create an iOS application that lets users track their daily habits.
+```
+
+The agent uses Makespec to create an RFC-format specification in `docs/specifications/` and promote it to `proposed` once complete. If requirements or decisions are missing, it keeps a draft until you resolve them.
+
+Review the specification. Edit it yourself or ask the agent to revise it, or keep it as written. Once you approve it, validate the records and accept it:
+
+```sh
+makespec check
+makespec status RFC-0001 accepted
+```
+
+Replace `RFC-0001` with the specification's ID. You can also ask the agent to accept it:
+
+```text
+Use makespec to check the records and set RFC-0001 to accepted.
+```
+
+Then ask the agent to implement the accepted specification, replacing `<spec-file>` with its filename:
+
+```text
+Implement the specification @docs/specifications/<spec-file>
+```
 
 ### Commands
 
