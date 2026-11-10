@@ -7,6 +7,21 @@ use std::{
 use tempfile::{TempDir, tempdir};
 
 const DECISION_BODY: &str = "## Context\n\nThe project needs a focused decision.\n\n## Decision\n\nUse the proposed approach.\n\n## Consequences\n\nThe decision remains in Git.";
+const SPECIFICATION_BODY: &str = "## Context\n\nCompare approaches to record management.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Compare record management approaches. |\n\n## Options\n\n| Criterion ID | Markdown templates | Makespec CLI |\n| --- | --- | --- |\n| FR-001 | | |\n\n**Chosen option:**";
+
+#[test]
+fn list_reports_an_empty_catalog() {
+    let project = tempdir().unwrap();
+    std::fs::create_dir_all(project.path().join("docs/decisions")).unwrap();
+    std::fs::create_dir_all(project.path().join("docs/specifications")).unwrap();
+    let listed = run(project.path(), &["list"]);
+
+    assert!(listed.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&listed.stdout),
+        "No records found.\n"
+    );
+}
 
 #[test]
 fn version_is_available_with_lowercase_short_flag() {
@@ -82,10 +97,30 @@ fn cli_initializes_creates_lists_changes_status_and_checks() {
     );
     assert!(String::from_utf8_lossy(&created.stdout).contains("ADR-0002"));
 
+    let created_specification = create(
+        project.path(),
+        "specification",
+        "Compare record management approaches",
+        SPECIFICATION_BODY,
+    );
+
+    assert!(
+        created_specification.status.success(),
+        "{}",
+        String::from_utf8_lossy(&created_specification.stderr)
+    );
+
     let listed = run(project.path(), &["list"]);
+    let listed_text = String::from_utf8_lossy(&listed.stdout);
 
     assert!(listed.status.success());
-    assert!(String::from_utf8_lossy(&listed.stdout).contains("Document a focused choice"));
+    assert!(listed_text.contains("Decisions (2)"));
+    assert!(listed_text.contains("Specifications (1)"));
+    assert!(listed_text.contains("ADR-0002  Document a focused choice"));
+    assert!(listed_text.contains("Status: draft  Date: "));
+    assert!(listed_text.contains("Path: docs/decisions/0002-document-a-focused-choice.md"));
+    assert!(listed_text.contains("RFC-0001  Compare record management approaches"));
+    assert!(!listed_text.contains('\t'));
 
     let proposed = run(project.path(), &["status", "ADR-0002", "proposed"]);
 

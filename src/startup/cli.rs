@@ -5,7 +5,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 use crate::{
     adapters::{embedded, filesystem::FilesystemStore},
     core::{
-        document::{Kind, MAX_DOCUMENT_BYTES, Status, today},
+        document::{DocumentSummary, Kind, MAX_DOCUMENT_BYTES, Status, today},
         error::{MakespecError, Result},
         service,
     },
@@ -81,16 +81,7 @@ pub fn run() -> Result<()> {
         CommandLine::List => {
             let documents = service::list(&store)?;
 
-            for document in documents {
-                println!(
-                    "{}\t{}\t{}\t{}\t{}",
-                    document.metadata.id,
-                    document.metadata.status,
-                    document.metadata.date,
-                    sanitize_terminal_text(&document.metadata.title),
-                    sanitize_terminal_text(&document.path)
-                );
-            }
+            print_document_list(&documents);
         }
         CommandLine::Status {
             id,
@@ -120,6 +111,52 @@ pub fn run() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn print_document_list(documents: &[DocumentSummary]) {
+    if documents.is_empty() {
+        println!("No records found.");
+
+        return;
+    }
+
+    let mut has_printed_group = false;
+
+    for (heading, prefix) in [("Decisions", "ADR-"), ("Specifications", "RFC-")] {
+        let group: Vec<_> = documents
+            .iter()
+            .filter(|document| document.metadata.id.starts_with(prefix))
+            .collect();
+
+        if group.is_empty() {
+            continue;
+        }
+
+        if has_printed_group {
+            println!();
+        }
+
+        println!("{heading} ({})", group.len());
+        has_printed_group = true;
+
+        for (index, document) in group.iter().enumerate() {
+            if index > 0 {
+                println!();
+            }
+
+            println!(
+                "  {}  {}",
+                sanitize_terminal_text(&document.metadata.id),
+                sanitize_terminal_text(&document.metadata.title)
+            );
+            println!(
+                "    Status: {}  Date: {}",
+                document.metadata.status,
+                sanitize_terminal_text(&document.metadata.date)
+            );
+            println!("    Path: {}", sanitize_terminal_text(&document.path));
+        }
+    }
 }
 
 fn read_stdin_bounded() -> Result<String> {
