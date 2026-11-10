@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/adbayb/makespec/compare/v0.2.0...v0.3.0) (2026-11-10)
+
+
+### Features
+
+* remove draft status to enforce doc completness ([d6776ac](https://github.com/adbayb/makespec/commit/d6776ac215d07f92bd38f8c76d479c48a418e760))
+
 ## [0.2.0](https://github.com/adbayb/makespec/compare/v0.1.1...v0.2.0) (2026-11-10)
 
 
