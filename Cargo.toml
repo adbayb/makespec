@@ -8,12 +8,12 @@ license = "MIT"
 
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
-clap = { version = "4.6", features = ["derive"] }
+clap = { version = "4.6", default-features = false, features = ["derive", "error-context", "help", "std", "usage"] }
 deunicode = "1.6"
-pulldown-cmark = "0.13"
+pulldown-cmark = { version = "0.13", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml_ng = "0.10"
-sha2 = "0.11"
+sha2 = { version = "0.11", default-features = false }
 tempfile = "3.27"
 thiserror = "2.0"
 
