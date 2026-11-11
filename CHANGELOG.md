@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/adbayb/makespec/compare/v0.3.0...v0.3.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* let skill ask questions and fix ID increment ([3b769a5](https://github.com/adbayb/makespec/commit/3b769a53eac6f4f13345d2c0062e9269a720ed7a))
+* let skill infer specification creation ([836efb2](https://github.com/adbayb/makespec/commit/836efb238789cb222915c776177fbbdf7faad934))
+
 ## [0.3.0](https://github.com/adbayb/makespec/compare/v0.2.0...v0.3.0) (2026-11-10)
 
 
