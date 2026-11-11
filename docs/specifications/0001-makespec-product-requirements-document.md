@@ -105,7 +105,7 @@ Parse front matter with `serde_yaml_ng` and headings/tables with `pulldown-cmark
 
 New records start as proposed; there is no draft status. Creation checks initial structure and permits incomplete content. Checking requires complete proposals, and acceptance validates the prospective document before writing. Rejected records receive structural checks. Failed readiness checks and invalid transitions leave the original file unchanged.
 
-Agents ask focused questions and wait for answers to resolve missing requirements and consequential design decisions before authoring. They may label low-risk, reversible defaults as assumptions, but must pause authoring when blocking answers are unavailable rather than create incomplete records. They continue clarification and correction until `makespec check` passes before reporting authoring complete. They must not invent facts or evidence to pass validation. A failing check signals unfinished work; a passing check does not establish the truth of the content.
+The [skill's gap-resolution workflow](../../.agents/skills/makespec/SKILL.md#2-resolve-gaps) defines interactive clarification, unattended proposal assumptions, and genuine blockers. Agents continue clarification and correction until `makespec check` passes before reporting authoring complete. They must not invent facts or evidence to pass validation. A failing check signals unfinished work; a passing check does not establish the truth of the content.
 
 Supersession records `superseded_by` only on the old record. Require a different, accepted replacement of the same kind when applying the transition. Historical targets may later become deprecated or superseded; `check` rejects missing or invalid targets and cycles.
 

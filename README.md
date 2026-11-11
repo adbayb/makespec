@@ -102,7 +102,7 @@ Open your initialized project in an AI coding harness such as GitHub Copilot, Cl
 /makespec Create an iOS application that lets users track their daily habits.
 ```
 
-The agent asks focused questions and waits for your answers to resolve missing requirements and design decisions before creating a proposed RFC-format specification in `docs/specifications/`. When no specifications exist, the first specification is `RFC-0001`, independent of the adoption decision `ADR-0001` and any cached allocations. Read the skill workflow for the agent's record-authoring and status boundaries.
+The agent creates a proposed RFC-format specification in `docs/specifications/`. In interactive sessions, it asks focused questions and waits for answers. In autopilot or explicitly unattended work, it resolves ordinary product gaps with explicit, reversible proposal assumptions. See the [skill workflow](.agents/skills/makespec/SKILL.md#2-resolve-gaps) for clarification rules and genuine blockers. When no specifications exist, the first specification is `RFC-0001`, independent of the adoption decision `ADR-0001` and any cached allocations.
 
 The agent continues clarification and correction until `makespec check` passes before reporting authoring complete. The CLI itself permits incomplete proposals, but they fail checking and cannot be accepted. There is no `draft` status. A passing check confirms structure and completeness rules, not the truth of assumptions or evidence.
 

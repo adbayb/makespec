@@ -5,7 +5,7 @@ license: MIT
 metadata:
     author: adbayb
     repository: adbayb/makespec
-    version: "1.0.1"
+    version: "1.0.2"
 ---
 
 # Makespec
@@ -26,9 +26,11 @@ For CLI operations, read [the CLI reference](references/cli.md) before invoking 
 
 ### 2. Resolve gaps
 
-Read [the writing guide](references/writing.md) before preparing planning prose, review feedback, or record content. Separate supplied facts, verified evidence, assumptions, and unknowns. For authoring, ask focused questions about conflicting accepted decisions or gaps affecting scope, requirements, option eligibility, or implementability, and wait for the user's answers before creating or editing the record. Use the harness's question tool when available.
+Read [the writing guide](references/writing.md) before preparing planning prose, review feedback, or record content. Separate supplied facts, verified evidence, assumptions, and unknowns. In interactive authoring, ask focused questions about gaps affecting scope, requirements, option eligibility, or implementability and wait for answers before writing. Use the harness's question tool when available, and ask follow-up questions until the answers support a complete proposal and an eligible chosen option.
 
-Ask follow-up questions until the answers support a complete proposal and an eligible chosen option. Label only low-risk, reversible defaults as assumptions; do not invent requirements, measurements, citations, or user approval. If answers are unavailable, pause authoring without writing an incomplete record. Do not move blocking questions into Open questions as a substitute for clarification.
+In autopilot or other explicitly unattended work, or when the question tool reports that the user is unavailable and directs a best guess, continue without waiting or repeating questions. Resolve ordinary product gaps with the smallest coherent scope and low-risk, reversible defaults consistent with the request and accepted records. State the assumed intended user, MVP features, data/storage/sync behavior, and testable success criteria where unspecified. Label these as proposal assumptions in the record, not user requirements or accepted decisions; distinguish proposed targets and expected behavior from measurements and verified results. Missing answers alone do not block an otherwise implementable proposal.
+
+Do not guess past conflicting accepted commitments, missing authorization, safety-critical unknowns, or an objective too unclear to choose a coherent proposal. If no safe, reversible default resolves a gap, stop authoring and report the specific blocker and needed input. Do not fabricate facts, evidence, citations, or approval, write an incomplete record, or move blocking questions into Open questions. Non-blocking refinements may remain there with a resolution path. Assumptions never authorize acceptance or application implementation.
 
 ### 3. Prepare content
 
@@ -42,11 +44,11 @@ Check authorization for the specific record operation, including the inferred cr
 
 For creation, use the ID returned by the CLI rather than guessing it. After creation or editing, run `makespec check`. For validation-only requests, run the check without editing records. For a requested status change, run it before the transition and apply only the requested transition; do not edit content as part of a status-only request.
 
-Fix validation errors within the authorized scope and rerun the check. If a fix requires missing decisions or additional authorization, ask and wait, then update the same record rather than allocating another ID. Continue clarification, correction, and checking until `makespec check` passes before reporting authoring complete. If tool failures or unrelated invalid records prevent a passing check, report the unfinished work without modifying unauthorized records. Do not weaken requirements, fabricate evidence, or claim a successful write, transition, or check without observing it.
+Fix validation errors within the authorized scope and rerun the check. Resolve newly discovered gaps through step 2, respecting its interactive and unattended paths, then update the same record rather than allocating another ID. Continue clarification, correction, and checking until `makespec check` passes before reporting authoring complete. If tool failures or unrelated invalid records prevent a passing check, report the unfinished work without modifying unauthorized records. Do not weaken requirements, fabricate evidence, or claim a successful write, transition, or check without observing it.
 
 ### 5. Report results
 
-Use [Output](#output) for the requested operation. Report only observed results and unresolved gaps; structural validation does not establish factual truth.
+Use [Output](#output) for the requested operation. Report only observed results and unresolved gaps; structural validation does not establish factual truth. Mention evidence limitations only when they materially affect the result.
 
 ## Output
 
@@ -59,10 +61,9 @@ Record: <ID and status, or no record changed>
 Validation: <makespec check result, or not run and why>
 Assumptions: <items, or none>
 Open gaps: <items, or none>
-Evidence: Structural validation does not establish the truth of assumptions or evidence.
 ```
 
-For validation-only requests, report the check result and any diagnostics without implying a record change. For status changes, report the observed transition and validation result. When authoring needs user input, ask the required questions and wait instead of issuing a final record report. For other blockers, state what was and was not changed, the error, and the next required action instead of implying success.
+For validation-only requests, report the check result and any diagnostics without implying a record change. For status changes, report the observed transition and validation result. When interactive authoring needs user input, ask the required questions and wait instead of issuing a final record report. For unattended authoring, report the resulting record and its assumptions, or the specific blocker from step 2. For other blockers, state what was and was not changed, the error, and the next required action instead of implying success.
 
 ## Example
 
@@ -75,5 +76,4 @@ Record: RFC-0002, accepted
 Validation: makespec check passed.
 Assumptions: none
 Open gaps: none
-Evidence: The check validates structure and completeness, not the truth of the record's claims.
 ```
