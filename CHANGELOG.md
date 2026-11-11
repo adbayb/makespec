@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/adbayb/makespec/compare/v0.3.1...v0.3.2) (2026-11-11)
+
+
+### Bug Fixes
+
+* let skill do assumptions in autopilot mode ([d963045](https://github.com/adbayb/makespec/commit/d963045d189454062fd01c79e989d4187dc87f91))
+
 ## [0.3.1](https://github.com/adbayb/makespec/compare/v0.3.0...v0.3.1) (2026-11-11)
 
 
