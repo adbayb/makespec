@@ -54,7 +54,7 @@ Replace with rollout, compatibility, and verification steps. Include migration o
 
 ## Open questions
 
-List remaining questions and how to resolve them. Ask the user about gaps that prevent a supported choice or implementable design, or document reasonable assumptions for review. Remove this optional section when no questions remain.
+List only remaining non-blocking questions and how to resolve them. Remove this optional section when no questions remain.
 
 ## References
 

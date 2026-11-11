@@ -9,17 +9,17 @@ status: accepted
 
 ## Context
 
-Concurrent Makespec processes must not allocate the same per-kind ID. Removing a record must not cause the next process to reuse a remembered allocation, and project configuration is outside the chosen layout.
+Concurrent Makespec processes must not allocate the same per-kind ID. Removing a record must not cause the next process to reuse a remembered allocation while other records of that kind remain. An empty record kind must start at `0001`, including at a reused project path. Project configuration is outside the chosen layout.
 
 ## Decision
 
 Serialize managed writes with a project-wide advisory lock. Keep the lock and per-kind high-water counters in the user cache, keyed by a SHA-256 digest of the canonical project path.
 
-Under the lock, reconcile each counter upward against visible IDs and persist the next allocation before publishing the document. Use positive u32 sequences and report exhaustion rather than wrapping. Do not decrement retained counters when records disappear.
+Under the lock, reset the selected kind's counter when no records of that kind exist; otherwise reconcile it upward against visible IDs. Persist the next allocation before publishing the document. Use positive u32 sequences and report exhaustion rather than wrapping.
 
 ## Consequences
 
-Cooperating processes share allocation state without adding lock or counter files to Git. Failed publication can leave gaps, which are valid.
+Cooperating processes share allocation state without adding lock or counter files to Git. Failed publication can leave gaps in nonempty record kinds, which are valid. Removing all records of a kind permits reuse of its former IDs; references to removed records must not be treated as identifying later records with the same ID.
 
 The cache must remain writable. Deleting counter state or changing the canonical project path loses remembered allocations that no longer appear in records. Disconnected clones and branches can allocate the same ID; check detects merged collisions, but the cache cannot provide global uniqueness.
 

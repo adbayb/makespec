@@ -24,7 +24,7 @@ Creation requires Context, Decision, and Consequences for decisions. Specificati
 
 There is no `draft` status. To update a record from an older version, change `status: draft` to `status: proposed` in its front matter, then run `makespec check` and complete the reported gaps.
 
-ADR and RFC sequences are independent. The allocator retains cached per-kind high-water marks at the same canonical project path, including allocations for removed records or failed writes. An empty specification directory at a reused path therefore does not guarantee `RFC-0001`. Do not renumber existing records to close gaps.
+ADR and RFC sequences are independent. Under the project lock, an empty record kind restarts at `0001`, even at a reused project path with cached allocations. For a nonempty kind, the allocator retains cached high-water marks, including allocations for removed records or failed writes. Do not renumber existing records to close gaps.
 
 Both formats may end with one optional `## References` section. If present, it must contain content and follow the other template sections, including Open questions for specifications.
 

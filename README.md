@@ -102,9 +102,9 @@ Open your initialized project in an AI coding harness such as GitHub Copilot, Cl
 /makespec Create an iOS application that lets users track their daily habits.
 ```
 
-The agent uses the Makespec workflow to refine requirements and create a proposed RFC-format specification in `docs/specifications/`. In a fresh project, the first specification is `RFC-0001`, independent of the adoption decision `ADR-0001`. Read the skill workflow for the agent's record-authoring and status boundaries.
+The agent asks focused questions and waits for your answers to resolve missing requirements and design decisions before creating a proposed RFC-format specification in `docs/specifications/`. When no specifications exist, the first specification is `RFC-0001`, independent of the adoption decision `ADR-0001` and any cached allocations. Read the skill workflow for the agent's record-authoring and status boundaries.
 
-An incomplete proposal fails `makespec check` and cannot be accepted until you resolve its validation errors. The CLI has no `draft` status. A passing check confirms structure and completeness rules, not the truth of assumptions or evidence.
+The agent continues clarification and correction until `makespec check` passes before reporting authoring complete. The CLI itself permits incomplete proposals, but they fail checking and cannot be accepted. There is no `draft` status. A passing check confirms structure and completeness rules, not the truth of assumptions or evidence.
 
 Review the specification. Edit it yourself or ask the agent to revise it, or keep it as written. To accept it, validate the records and run:
 
@@ -169,7 +169,7 @@ flowchart LR
     Filesystem --> Records["Markdown records"]
 ```
 
-Each document kind has its own incrementing IDs. Cached counters retain earlier allocations at the same project path, even if you remove records; failed writes can leave gaps. Records contain a date and use YAML front matter as the sole status source. You can review and version the files in Git.
+Each document kind has its own incrementing IDs. When no records of a kind exist, its sequence restarts at `0001`. Otherwise, cached counters retain earlier allocations at the same project path, even if you remove records; failed writes can leave gaps. Records contain a date and use YAML front matter as the sole status source. You can review and version the files in Git.
 
 Makespec validates paths and metadata, limits document input to 2 MiB, uses exclusive creation, and checks for external edits before replacing files. It keeps ID allocation locks outside the repository. Advisory locks coordinate Makespec processes but cannot control external editors.
 

@@ -26,9 +26,9 @@ For CLI operations, read [the CLI reference](references/cli.md) before invoking 
 
 ### 2. Resolve gaps
 
-Read [the writing guide](references/writing.md) before preparing planning prose, review feedback, or record content. Separate supplied facts, verified evidence, assumptions, and unknowns. Ask focused questions about conflicting accepted decisions or gaps affecting scope, requirements, option eligibility, or implementability.
+Read [the writing guide](references/writing.md) before preparing planning prose, review feedback, or record content. Separate supplied facts, verified evidence, assumptions, and unknowns. For authoring, ask focused questions about conflicting accepted decisions or gaps affecting scope, requirements, option eligibility, or implementability, and wait for the user's answers before creating or editing the record. Use the harness's question tool when available.
 
-If clarification is unavailable, label only low-risk, reversible defaults as assumptions. Leave consequential decisions and unsupported claims unresolved; do not invent requirements, measurements, citations, or user approval. Gaps that prevent a supported choice or implementable design block completion and acceptance, not creation of a proposed record with the CLI's required initial structure. Capture unresolved decisions in Open questions and report readiness errors rather than withholding the authorized proposal or forcing it to pass validation.
+Ask follow-up questions until the answers support a complete proposal and an eligible chosen option. Label only low-risk, reversible defaults as assumptions; do not invent requirements, measurements, citations, or user approval. If answers are unavailable, pause authoring without writing an incomplete record. Do not move blocking questions into Open questions as a substitute for clarification.
 
 ### 3. Prepare content
 
@@ -42,7 +42,7 @@ Check authorization for the specific record operation, including the inferred cr
 
 For creation, use the ID returned by the CLI rather than guessing it. After creation or editing, run `makespec check`. For validation-only requests, run the check without editing records. For a requested status change, run it before the transition and apply only the requested transition; do not edit content as part of a status-only request.
 
-Fix validation errors within the authorized scope and rerun the check. If a fix requires missing decisions or additional authorization, report the blocker. Do not weaken requirements, fabricate evidence, or claim a successful write, transition, or check without observing it.
+Fix validation errors within the authorized scope and rerun the check. If a fix requires missing decisions or additional authorization, ask and wait, then update the same record rather than allocating another ID. Continue clarification, correction, and checking until `makespec check` passes before reporting authoring complete. If tool failures or unrelated invalid records prevent a passing check, report the unfinished work without modifying unauthorized records. Do not weaken requirements, fabricate evidence, or claim a successful write, transition, or check without observing it.
 
 ### 5. Report results
 
@@ -62,7 +62,7 @@ Open gaps: <items, or none>
 Evidence: Structural validation does not establish the truth of assumptions or evidence.
 ```
 
-For validation-only requests, report the check result and any diagnostics without implying a record change. For status changes, report the observed transition and validation result. When blocked, state what was and was not changed, the error or missing decision, and the next required action instead of implying success.
+For validation-only requests, report the check result and any diagnostics without implying a record change. For status changes, report the observed transition and validation result. When authoring needs user input, ask the required questions and wait instead of issuing a final record report. For other blockers, state what was and was not changed, the error, and the next required action instead of implying success.
 
 ## Example
 

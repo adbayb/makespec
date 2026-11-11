@@ -499,7 +499,11 @@ impl ProjectStore for FilesystemStore {
                 &mut counters.specification
             };
 
-            *current = (*current).max(max_number);
+            *current = if max_number == 0 {
+                0
+            } else {
+                (*current).max(max_number)
+            };
             let number = current.checked_add(1).ok_or_else(|| {
                 MakespecError::Invalid("document ID sequence is exhausted".into())
             })?;
@@ -764,39 +768,61 @@ mod tests {
 
     #[test]
     fn creates_unique_documents_under_concurrent_calls() {
-        let (_directory, store) = initialized_store();
-        let store = Arc::new(store);
-        let workers: Vec<_> = (0..8)
-            .map(|index| {
-                let store = Arc::clone(&store);
+        for (kind, body, first, last) in [
+            (Kind::Decision, DECISION_BODY, "ADR-0002", "ADR-0009"),
+            (
+                Kind::Specification,
+                include_str!("../../.agents/skills/makespec/references/specification-template.md"),
+                "RFC-0001",
+                "RFC-0008",
+            ),
+        ] {
+            let (_directory, store) = initialized_store();
+            let store = Arc::new(store);
+            let workers: Vec<_> = (0..8)
+                .map(|index| {
+                    let store = Arc::clone(&store);
 
-                std::thread::spawn(move || {
-                    service::create(
-                        store.as_ref(),
-                        Kind::Decision,
-                        format!("Concurrent decision {index}"),
-                        DECISION_BODY.to_string(),
-                        "2026-11-09",
-                    )
-                    .unwrap()
-                    .metadata
-                    .id
+                    std::thread::spawn(move || {
+                        service::create(
+                            store.as_ref(),
+                            kind,
+                            format!("Concurrent {kind} {index}"),
+                            body.to_string(),
+                            "2026-11-09",
+                        )
+                        .unwrap()
+                        .metadata
+                        .id
+                    })
                 })
-            })
-            .collect();
-        let ids: std::collections::BTreeSet<_> = workers
-            .into_iter()
-            .map(|worker| worker.join().unwrap())
-            .collect();
+                .collect();
+            let ids: std::collections::BTreeSet<_> = workers
+                .into_iter()
+                .map(|worker| worker.join().unwrap())
+                .collect();
 
-        assert_eq!(ids.len(), 8);
-        assert!(ids.contains("ADR-0002"));
-        assert!(ids.contains("ADR-0009"));
+            assert_eq!(ids.len(), 8);
+            assert!(ids.contains(first));
+            assert!(ids.contains(last));
+        }
     }
 
     #[test]
-    fn creation_preserves_existing_counters_for_both_document_kinds() {
+    fn creation_preserves_existing_counters_for_nonempty_document_kinds() {
         let (_directory, store) = initialized_store();
+        let body =
+            include_str!("../../.agents/skills/makespec/references/specification-template.md");
+
+        service::create(
+            &store,
+            Kind::Specification,
+            "Existing functionality".into(),
+            body.into(),
+            "2026-11-09",
+        )
+        .unwrap();
+
         let (_, state_path) = store.lock_paths().unwrap();
 
         fs::write(&state_path, "adr=9\nrfc=12\n").unwrap();
@@ -819,6 +845,46 @@ mod tests {
             .unwrap();
 
             assert_eq!(created.metadata.id, expected);
+        }
+    }
+
+    #[test]
+    fn creation_restarts_empty_document_kinds_despite_cached_allocations() {
+        for (kind, body, expected) in [
+            (
+                Kind::Specification,
+                include_str!("../../.agents/skills/makespec/references/specification-template.md"),
+                "RFC-0001",
+            ),
+            (Kind::Decision, DECISION_BODY, "ADR-0001"),
+        ] {
+            let (directory, store) = initialized_store();
+            service::create(
+                &store,
+                kind,
+                "Removed record".into(),
+                body.into(),
+                "2026-11-09",
+            )
+            .unwrap();
+
+            for document in store.catalog().unwrap() {
+                if document.metadata.id.starts_with(kind.id_prefix()) {
+                    fs::remove_file(directory.path().join(document.path)).unwrap();
+                }
+            }
+
+            let reopened = FilesystemStore::new(directory.path()).unwrap();
+            let replacement = service::create(
+                &reopened,
+                kind,
+                "First visible record".into(),
+                body.into(),
+                "2026-11-09",
+            )
+            .unwrap();
+
+            assert_eq!(replacement.metadata.id, expected);
         }
     }
 

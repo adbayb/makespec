@@ -87,7 +87,7 @@ The CLI adds YAML front matter containing `id`, `title`, `date` (`YYYY-MM-DD`), 
 
 Generate ASCII kebab-case slugs with `deunicode` transliteration. Creation titles must contain 1 to 200 bytes after trimming, contain no control characters or path separators, and produce a nonempty slug. Later title edits do not rename the file. CLI status updates preserve path, ID, date, body bytes, and unrelated YAML fields.
 
-Allocate IDs under a project-wide advisory lock. Reconcile cached per-kind high-water marks against existing IDs and persist the next number before publishing a record. Failed writes may leave gaps. Store locks and counter state in the user cache, keyed by the canonical project path. Disconnected branches can allocate the same ID; `check` reports merged collisions.
+Allocate IDs under a project-wide advisory lock. When no records of the requested kind exist, restart that kind at `0001` regardless of cached allocations. Otherwise, reconcile cached per-kind high-water marks against existing IDs. Persist the next number before publishing a record; failed writes may leave gaps in nonempty kinds. Store locks and counter state in the user cache, keyed by the canonical project path. Disconnected branches can allocate the same ID; `check` reports merged collisions.
 
 ### Initialization
 
@@ -105,7 +105,7 @@ Parse front matter with `serde_yaml_ng` and headings/tables with `pulldown-cmark
 
 New records start as proposed; there is no draft status. Creation checks initial structure and permits incomplete content. Checking requires complete proposals, and acceptance validates the prospective document before writing. Rejected records receive structural checks. Failed readiness checks and invalid transitions leave the original file unchanged.
 
-Agents clarify missing requirements before authoring, preferably by asking the user focused questions. If clarification is unavailable, they may choose reasonable defaults and label assumptions for review. They must not invent facts or evidence to pass validation. A failing check signals unfinished work; a passing check does not establish the truth of the content.
+Agents ask focused questions and wait for answers to resolve missing requirements and consequential design decisions before authoring. They may label low-risk, reversible defaults as assumptions, but must pause authoring when blocking answers are unavailable rather than create incomplete records. They continue clarification and correction until `makespec check` passes before reporting authoring complete. They must not invent facts or evidence to pass validation. A failing check signals unfinished work; a passing check does not establish the truth of the content.
 
 Supersession records `superseded_by` only on the old record. Require a different, accepted replacement of the same kind when applying the transition. Historical targets may later become deprecated or superseded; `check` rejects missing or invalid targets and cycles.
 
