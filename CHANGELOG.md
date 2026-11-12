@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.3](https://github.com/adbayb/makespec/compare/v0.3.2...v0.3.3) (2026-11-12)
+
+
+### Bug Fixes
+
+* remove staled draft status reference ([f45bfd5](https://github.com/adbayb/makespec/commit/f45bfd531b695f7c5bf12552bca9f72d9efe78ab))
+* simplify date formating to reduce binary size by 16 kB ([923959b](https://github.com/adbayb/makespec/commit/923959b592d669f3578a7bfe10c3c783f9c372c2))
+
 ## [0.3.2](https://github.com/adbayb/makespec/compare/v0.3.1...v0.3.2) (2026-11-11)
 
 
