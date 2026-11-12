@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/adbayb/makespec/compare/v0.4.0...v0.4.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* **skill:** broaden option discovery ([6e9cded](https://github.com/adbayb/makespec/commit/6e9cded6dfdbc08a3dfe285bc513b8ce85bb8565))
+
 ## [0.4.0](https://github.com/adbayb/makespec/compare/v0.3.3...v0.4.0) (2026-11-12)
 
 
