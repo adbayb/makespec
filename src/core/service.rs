@@ -58,7 +58,7 @@ pub(crate) trait ProjectStore {
     fn catalog(&self) -> Result<Vec<DocumentSummary>>;
     fn document(&self, id: &str) -> Result<Document>;
     fn create_proposal(&self, new_document: NewDocument) -> Result<Document>;
-    fn replace(&self, previous: &Document, replacement: &Document) -> Result<Document>;
+    fn replace(&self, previous: &Document, replacement: &Document) -> Result<()>;
 }
 
 pub(crate) fn initialize(
@@ -239,7 +239,7 @@ pub(crate) fn change_status(
 
     let replacement = update_metadata(&current, metadata)?;
 
-    if matches!(next_status, Status::Proposed | Status::Accepted) {
+    if next_status == Status::Accepted {
         let errors = validate_document(&replacement);
 
         if !errors.is_empty() {
@@ -250,7 +250,9 @@ pub(crate) fn change_status(
         }
     }
 
-    store.replace(&current, &replacement)
+    store.replace(&current, &replacement)?;
+
+    Ok(replacement)
 }
 
 pub(crate) fn check(store: &impl ProjectStore) -> Result<Vec<String>> {

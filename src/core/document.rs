@@ -228,7 +228,7 @@ impl Metadata {
 }
 
 pub fn today() -> String {
-    Local::now().format("%Y-%m-%d").to_string()
+    Local::now().date_naive().to_string()
 }
 
 pub fn slugify(title: &str) -> Result<String> {

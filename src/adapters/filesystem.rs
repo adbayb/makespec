@@ -527,7 +527,7 @@ impl ProjectStore for FilesystemStore {
         })
     }
 
-    fn replace(&self, previous: &Document, replacement: &Document) -> Result<Document> {
+    fn replace(&self, previous: &Document, replacement: &Document) -> Result<()> {
         if previous.path != replacement.path
             || previous.metadata.id != replacement.metadata.id
             || previous.metadata.date != replacement.metadata.date
@@ -552,9 +552,8 @@ impl ProjectStore for FilesystemStore {
             }
 
             temp.persist(&path)
-                .map_err(|error| MakespecError::Io(error.error))?;
-
-            parse_document(&replacement.raw, replacement.path.clone())
+                .map(|_| ())
+                .map_err(|error| MakespecError::Io(error.error))
         })
     }
 }
