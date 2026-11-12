@@ -83,7 +83,7 @@ Use the command reference for exact syntax and lifecycle transitions, the templa
 
 Store decisions in `docs/decisions/` and specifications in `docs/specifications/`. Each kind has its own positive `u32` sequence, starting at `0001` and expanding beyond four digits without extra leading zeros. Use `ADR-` IDs for decisions and `RFC-` IDs for specifications, with IDs such as `ADR-0001` and filenames such as `0001-use-local-storage.md`.
 
-The CLI adds YAML front matter containing `id`, `title`, `date` (`YYYY-MM-DD`), and `status`, plus a matching `# <ID>: <Title>` heading. Derive kind from the ID prefix. Keep status and date only in front matter; do not duplicate `kind`, `slug`, or `schema_version`.
+The CLI adds YAML front matter containing `id`, `title`, `date` (`YYYY-MM-DD`), and `status`, plus a matching `# <ID>: <Title>` heading. Derive kind from the ID prefix. Keep status and date only in front matter.
 
 Generate ASCII kebab-case slugs with `deunicode` transliteration. Creation titles must contain 1 to 200 bytes after trimming, contain no control characters or path separators, and produce a nonempty slug. Later title edits do not rename the file. CLI status updates preserve path, ID, date, body bytes, and unrelated YAML fields.
 
@@ -103,7 +103,7 @@ Preflight managed destinations, create both directories, stage files beside thei
 
 Parse front matter with `serde_yaml_ng` and headings/tables with `pulldown-cmark`. Validation checks metadata, matching title headings, ordered unique sections, canonical tables, criterion references, assessments, and option eligibility. Each comparison requires at least two options. `No change` is optional and should appear only when the current state is a meaningful alternative; when it is omitted, compare at least two distinct approaches that address the same need. Validation cannot judge prose quality or verify evidence.
 
-New records start as proposed; there is no draft status. Creation checks initial structure and permits incomplete content. Checking requires complete proposals, and acceptance validates the prospective document before writing. Rejected records receive structural checks. Failed readiness checks and invalid transitions leave the original file unchanged.
+New records start as proposed. Creation checks initial structure and permits incomplete content. Checking requires complete proposals, and acceptance validates the prospective document before writing. Rejected records receive structural checks. Failed readiness checks and invalid transitions leave the original file unchanged.
 
 The [skill's gap-resolution workflow](../../.agents/skills/makespec/SKILL.md#2-resolve-gaps) defines interactive clarification, unattended proposal assumptions, and genuine blockers. Agents continue clarification and correction until `makespec check` passes before reporting authoring complete. They must not invent facts or evidence to pass validation. A failing check signals unfinished work; a passing check does not establish the truth of the content.
 
@@ -142,7 +142,7 @@ Install a verified native binary or build from source using the README. Put the 
 
 Create records for the project's actual decisions and functionality. Use ordinary workspace tools for prose, the templates for structure, and the installed skill for authoring and approval boundaries. Initialization does not require a companion specification.
 
-Existing records must follow the fixed directories and current format. For records from older versions with `status: draft`, change the front matter to `status: proposed`, then check and complete them. Initialization preserves valid records and matching installed files; it does not convert arbitrary Markdown or overwrite conflicts. Resolve reported conflicts explicitly before retrying.
+Existing records must follow the fixed directories and current format. Initialization preserves valid records and matching installed files; it does not convert arbitrary Markdown or overwrite conflicts. Resolve reported conflicts explicitly before retrying.
 
 Verify adoption by creating and listing records, checking a complete proposal, and applying an authorized status change. Confirm that invalid promotions leave the original record unchanged. Run `makespec check` before contributing record changes. Maintainers run the contribution checks, with unit and CLI tests covering initialization, validation, concurrent allocation, status preservation, and bounded discovery.
 

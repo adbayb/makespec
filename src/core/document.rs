@@ -383,11 +383,16 @@ fn split_frontmatter<'a>(content: &'a str, path: &str) -> Result<(&'a str, &'a s
 }
 
 fn parse_metadata(yaml: &str, path: &str) -> Result<Metadata> {
-    let mut metadata: Metadata = serde_yaml_ng::from_str(yaml)
+    let metadata: Metadata = serde_yaml_ng::from_str(yaml)
         .map_err(|error| MakespecError::Invalid(format!("{path}: {error}")))?;
 
-    for removed_field in ["kind", "slug", "schema_version"] {
-        metadata.extra.remove(removed_field);
+    if let Some(field) = ["kind", "slug", "schema_version"]
+        .into_iter()
+        .find(|field| metadata.extra.contains_key(*field))
+    {
+        return Err(MakespecError::Invalid(format!(
+            "{path}: unsupported front matter field `{field}`"
+        )));
     }
 
     metadata
@@ -987,7 +992,7 @@ mod tests {
 
     #[test]
     fn status_transitions_follow_the_lifecycle() {
-        assert!("draft".parse::<Status>().is_err());
+        assert!("unknown".parse::<Status>().is_err());
         assert!(Status::Proposed.can_transition_to(Status::Rejected));
         assert!(Status::Proposed.can_transition_to(Status::Accepted));
         assert!(Status::Accepted.can_transition_to(Status::Superseded));
@@ -1024,16 +1029,36 @@ mod tests {
     }
 
     #[test]
-    fn removed_front_matter_fields_are_omitted_when_documents_are_updated() {
-        let legacy = "---\nid: ADR-0001\nkind: rfc\ntitle: Old title\nslug: old-title\ndate: 2026-11-09\nstatus: proposed\nschema_version: 99\n---\n\n# ADR-0001: Old title\n\n## Context\n\nIssue.\n\n## Decision\n\nChoice.\n\n## Consequences\n\nTrade-off.";
-        let document = parse_document(legacy, "docs/decisions/0001-old-title.md".into()).unwrap();
+    fn unrelated_front_matter_fields_are_preserved_when_documents_are_updated() {
+        let content = "---\nid: ADR-0001\ntitle: A focused decision\ndate: 2026-11-09\nstatus: proposed\nowner: platform\n---\n\n# ADR-0001: A focused decision\n\n## Context\n\nIssue.\n\n## Decision\n\nChoice.\n\n## Consequences\n\nTrade-off.";
+        let document =
+            parse_document(content, "docs/decisions/0001-focused-decision.md".into()).unwrap();
         let mut metadata = document.metadata.clone();
         metadata.status = Status::Accepted;
 
         let updated = update_metadata(&document, metadata).unwrap();
 
-        for field in ["kind:", "slug:", "schema_version:"] {
-            assert!(!updated.raw.contains(field));
+        assert!(updated.raw.contains("owner: platform"));
+    }
+
+    #[test]
+    fn unsupported_front_matter_fields_are_rejected() {
+        for field in [
+            "kind: decision",
+            "slug: focused-decision",
+            "schema_version: 1",
+        ] {
+            let content = format!(
+                "---\nid: ADR-0001\ntitle: A focused decision\ndate: 2026-11-09\nstatus: proposed\n{field}\n---\n\n# ADR-0001: A focused decision\n\n## Context\n\nIssue.\n\n## Decision\n\nChoice.\n\n## Consequences\n\nTrade-off."
+            );
+            let error = parse_document(content.as_str(), "record.md".into()).unwrap_err();
+            let field_name = field.split_once(':').unwrap().0;
+
+            assert!(
+                error
+                    .to_string()
+                    .contains(&format!("unsupported front matter field `{field_name}`"))
+            );
         }
     }
 

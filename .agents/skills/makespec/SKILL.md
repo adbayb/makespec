@@ -5,7 +5,7 @@ license: MIT
 metadata:
     author: adbayb
     repository: adbayb/makespec
-    version: "1.0.2"
+    version: "1.0.3"
 ---
 
 # Makespec

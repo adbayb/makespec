@@ -22,8 +22,6 @@ Same-status requests are idempotent and do not validate readiness; use `makespec
 
 Creation requires Context, Decision, and Consequences for decisions. Specifications initially require Context, Requirements and constraints, and Options, including at least one functional requirement and a comparison table. Checking a proposal and accepting it require complete content: all five specification sections, assessments for each criterion and option, an eligible chosen option, and no template placeholders. Non-functional requirements (NFR) and constraints are optional.
 
-There is no `draft` status. To update a record from an older version, change `status: draft` to `status: proposed` in its front matter, then run `makespec check` and complete the reported gaps.
-
 ADR and RFC sequences are independent. Under the project lock, an empty record kind restarts at `0001`, even at a reused project path with cached allocations. For a nonempty kind, the allocator retains cached high-water marks, including allocations for removed records or failed writes. Do not renumber existing records to close gaps.
 
 Both formats may end with one optional `## References` section. If present, it must contain content and follow the other template sections, including Open questions for specifications.

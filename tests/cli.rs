@@ -329,9 +329,9 @@ fn incomplete_proposals_fail_check_and_cannot_be_accepted_until_completed() {
     assert!(String::from_utf8_lossy(&result.stderr).contains("cannot set RFC-0001 to accepted"));
     assert_eq!(std::fs::read_to_string(&path).unwrap(), proposal);
 
-    let removed_status = run(project.path(), &["status", "RFC-0001", "draft"]);
+    let invalid_status = run(project.path(), &["status", "RFC-0001", "unknown"]);
 
-    assert_eq!(removed_status.status.code(), Some(2));
+    assert_eq!(invalid_status.status.code(), Some(2));
     assert_eq!(std::fs::read_to_string(&path).unwrap(), proposal);
 
     let completed = proposal
