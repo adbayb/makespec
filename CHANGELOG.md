@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/adbayb/makespec/compare/v0.3.3...v0.4.0) (2026-11-12)
+
+
+### Features
+
+* support themed option choices ([34aaa54](https://github.com/adbayb/makespec/commit/34aaa54ec746d9abc0853ee7348a11b65e72e675))
+
 ## [0.3.3](https://github.com/adbayb/makespec/compare/v0.3.2...v0.3.3) (2026-11-12)
 
 
