@@ -175,6 +175,17 @@ Makespec validates paths and metadata, limits document input to 2 MiB, uses excl
 
 Read [RFC-0001: Makespec product requirements document (PRD)](docs/specifications/0001-makespec-product-requirements-document.md) for the product and implementation specification.
 
+### Performance
+
+Sample catalog benchmark on macOS ARM64 with 500 synthetic decisions plus the adoption decision:
+
+| Command | Mean wall time | Peak resident memory |
+| --- | ---: | ---: |
+| `makespec list` | 27.7 ± 4.6 ms | 7.2 ± 0.0 MiB |
+| `makespec check` | 26.4 ± 0.8 ms | 7.7 ± 0.0 MiB |
+
+Measured with three warmup runs and repeated measurements using Hyperfine. Results vary by hardware and system load; see [benchmark instructions and budgets](CONTRIBUTING.md#how-to-measure-performance) to reproduce them.
+
 <br>
 
 ## ✍️ Contribution
