@@ -5,7 +5,7 @@ license: MIT
 metadata:
     author: adbayb
     repository: adbayb/makespec
-    version: "1.0.3"
+    version: "1.1.0"
 ---
 
 # Makespec
@@ -22,11 +22,15 @@ Identify whether the request is to plan, review, validate, create, edit, or chan
 
 When the user explicitly invokes Makespec to create, specify, or build a product or feature, infer an authorized request to create a proposed RFC, even if they do not say "specification" or "RFC". Honor explicit plan-only, review-only, or no-write instructions instead. This inference authorizes the specification, not application implementation or acceptance.
 
+Treat each standalone request to create, specify, or build a product or feature as a fresh proposed RFC, even when its wording is identical to a completed request or an existing RFC covers the same requirements. The user need not say "new", name a different concept, or justify another record. Do not deduplicate creation requests or replace creation with "already covered", validation of an existing record, or a no-change report. Use existing records as context or references and leave them unchanged.
+
+Reuse a record only when the current request asks to revise, continue, resume, or use that record, or answers clarification questions in its unfinished authoring task. A record ID alone may be context, not an edit instruction. Repeated creation wording after a completed task is a fresh request, not a continuation or a validation retry; apply the correction loop in step 4 only within the same unfinished task. Honor explicit instructions to avoid duplicates or reuse a record.
+
 For CLI operations, read [the CLI reference](references/cli.md) before invoking commands from the project root. If `makespec` is unavailable on `PATH`, stop those operations and ask the user to install or configure it; do not substitute manual writes. Planning and supplied-content review can proceed without the CLI.
 
 ### 2. Resolve gaps
 
-Read [the writing guide](references/writing.md) before preparing planning prose, review feedback, or record content. Separate supplied facts, verified evidence, assumptions, and unknowns. In interactive authoring, ask focused questions about gaps affecting scope, requirements, option eligibility, or implementability and wait for answers before writing. Use the harness's question tool when available, and ask follow-up questions until the answers support a complete proposal and an eligible chosen option.
+Read [the writing guide](references/writing.md) before preparing planning prose, review feedback, or record content. Separate supplied facts, verified evidence, assumptions, and unknowns. In interactive authoring, ask focused questions about gaps affecting scope, requirements, option eligibility, or implementability and wait for answers before writing. Use the harness's question tool when available, and ask follow-up questions until the answers support a complete proposal and eligible choices for every decision theme.
 
 In autopilot or other explicitly unattended work, or when the question tool reports that the user is unavailable and directs a best guess, continue without waiting or repeating questions. Resolve ordinary product gaps with the smallest coherent scope and low-risk, reversible defaults consistent with the request and accepted records. State the assumed intended user, MVP features, data/storage/sync behavior, and testable success criteria where unspecified. Label these as proposal assumptions in the record, not user requirements or accepted decisions; distinguish proposed targets and expected behavior from measurements and verified results. Missing answers alone do not block an otherwise implementable proposal.
 
@@ -44,7 +48,7 @@ Check authorization for the specific record operation, including the inferred cr
 
 For creation, use the ID returned by the CLI rather than guessing it. After creation or editing, run `makespec check`. For validation-only requests, run the check without editing records. For a requested status change, run it before the transition and apply only the requested transition; do not edit content as part of a status-only request.
 
-Fix validation errors within the authorized scope and rerun the check. Resolve newly discovered gaps through step 2, respecting its interactive and unattended paths, then update the same record rather than allocating another ID. Continue clarification, correction, and checking until `makespec check` passes before reporting authoring complete. If tool failures or unrelated invalid records prevent a passing check, report the unfinished work without modifying unauthorized records. Do not weaken requirements, fabricate evidence, or claim a successful write, transition, or check without observing it.
+Fix validation errors within the authorized scope and rerun the check. Resolve newly discovered gaps through step 2, respecting its interactive and unattended paths, then update the same record rather than allocating another ID for that authoring task. This correction loop does not apply to independent requests, which follow step 1. Continue clarification, correction, and checking until `makespec check` passes before reporting authoring complete. If tool failures or unrelated invalid records prevent a passing check, report the unfinished work without modifying unauthorized records. Do not weaken requirements, fabricate evidence, or claim a successful write, transition, or check without observing it.
 
 ### 5. Report results
 

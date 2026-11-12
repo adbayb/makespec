@@ -48,6 +48,37 @@ fn specification_template_chosen_option_passes_cli_validation() {
 }
 
 #[test]
+fn specification_with_themed_choices_can_be_created_checked_and_accepted() {
+    let project = initialized_project();
+    let body = SPECIFICATION_BODY
+        .replace(
+            "## Options",
+            "## Options\n\n### User experience",
+        )
+        .replace(
+            "## Design",
+            "### Technical stack\n\n| Criterion ID | Rust | Go | Python |\n| --- | --- | --- | --- |\n| FR-001 | Fully meets - Validates comparisons locally. | Fully meets - Validates comparisons locally. | Fully meets - Validates comparisons locally. |\n\n**Chosen option:** Rust\n\n## Design",
+        );
+    let created = create(project.path(), "specification", "Themed choices", &body);
+
+    assert!(
+        created.status.success(),
+        "{}",
+        String::from_utf8_lossy(&created.stderr)
+    );
+
+    for args in [vec!["check"], vec!["status", "RFC-0001", "accepted"]] {
+        let result = run(project.path(), &args);
+
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+}
+
+#[test]
 fn list_reports_an_empty_catalog() {
     let project = tempdir().unwrap();
     std::fs::create_dir_all(project.path().join("docs/decisions")).unwrap();

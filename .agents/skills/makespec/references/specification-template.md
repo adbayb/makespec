@@ -23,26 +23,24 @@ Keep this subsection only for genuine hard boundaries, such as a required platfo
 
 ## Options
 
-Describe each candidate and its baseline. Include at least two options. Include `No change` only when it represents a meaningful current-state alternative; omit it when it would add no useful comparison, such as for a greenfield project with no existing capability. When omitting `No change`, compare at least two distinct approaches that address the same need. Name options in the column headers and compare them against the same criteria. Include one row for each requirement and constraint ID; remove rows for criteria you omit above.
+Identify the decision themes needed for an implementable proposal before listing candidates. Separate independent choices into named `###` subsections under Options, such as user experience and technical stack. For technical proposals, address stack and infrastructure choices when material to implementation; explain when an accepted record already settles them or they do not apply. Do not force unrelated choices into a single winner or enumerate every possible combination.
+
+Use one comparison table and one `**Chosen option:**` line per theme. For a single decision, the table and choice may sit directly under Options without a subsection. Discover and describe the materially distinct, plausible candidates before constructing each table. Derive its option columns from those candidates, not a preset count. Two is a minimum per theme, not a target or maximum; there is no default count. Let themes have different counts when their decision spaces differ. Do not truncate meaningful alternatives to match another table or pad a small decision space with redundant or implausible candidates.
+
+Include `No change` only when it represents a meaningful current-state alternative; omit it when it would add no useful comparison, such as for a greenfield project with no existing capability. When omitting `No change`, compare at least two distinct approaches that address the same need. Start each table with a `Criterion ID` column, followed by one column per candidate using its name as the header. Compare candidates against the same criteria within the theme. Include rows for every relevant requirement and constraint ID; the tables together must cover all IDs. Repeat shared criteria in each affected theme, with explanations scoped to that choice.
 
 Fill each cell with `LABEL - explanation` and supporting evidence. Label assumptions and distinguish expected behavior from verified results:
 
 - Requirements: `Does not meet`, `Partially meets`, or `Fully meets`.
 - Constraints: `PASS` or `FAIL`.
 
-| Criterion ID | No change | Proposed approach |
-| --- | --- | --- |
-| FR-001 | | |
-| NFR-001 | | |
-| C-001 | | |
+**Chosen option:** Selected candidate
 
-**Chosen option:** Proposed approach
-
-Choose an option that fully meets every MUST requirement and passes every constraint. Replace `Proposed approach` with its name copied exactly from the table. Explain the choice and its tradeoffs using criterion IDs. Do not calculate an aggregate score.
+Replace `Selected candidate` with one option per theme that fully meets every MUST requirement and passes every constraint assessed there. Copy its name exactly from that theme's table. Explain each choice and its tradeoffs using criterion IDs. Verify that the combined choices are compatible and together satisfy all MUST requirements and constraints; explain cross-theme dependencies rather than treating local eligibility as proof of compatibility. Before finishing, check each candidate set independently for missing meaningful alternatives and filler options. Do not calculate an aggregate score.
 
 ## Design
 
-Replace with the chosen option's behavior and interfaces, including failure cases, in enough detail to implement it. Include examples beside the behavior they illustrate.
+Replace with the combined chosen options' behavior, stack, infrastructure, and interfaces as applicable, including failure cases, in enough detail to implement it. Include examples beside the behavior they illustrate.
 
 ### Risks and mitigations
 

@@ -696,6 +696,7 @@ mod tests {
     use crate::{adapters::embedded, core::service};
 
     const DECISION_BODY: &str = "## Context\n\nA focused decision is needed.\n\n## Decision\n\nUse the proposed approach.\n\n## Consequences\n\nThe choice is documented.";
+    const SPECIFICATION_BODY: &str = "## Context\n\nBrowse local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Browse record titles. |\n\n## Options\n\n| Criterion ID | List view | Card view |\n| --- | --- | --- |\n| FR-001 | | |";
 
     fn initialized_store() -> (tempfile::TempDir, FilesystemStore) {
         let directory = tempfile::tempdir().unwrap();
@@ -732,8 +733,7 @@ mod tests {
     #[test]
     fn initialization_preserves_existing_specifications_and_their_sequence() {
         let (directory, store) = initialized_store();
-        let body =
-            include_str!("../../.agents/skills/makespec/references/specification-template.md");
+        let body = SPECIFICATION_BODY;
         let specification = service::create(
             &store,
             Kind::Specification,
@@ -771,7 +771,7 @@ mod tests {
             (Kind::Decision, DECISION_BODY, "ADR-0002", "ADR-0009"),
             (
                 Kind::Specification,
-                include_str!("../../.agents/skills/makespec/references/specification-template.md"),
+                SPECIFICATION_BODY,
                 "RFC-0001",
                 "RFC-0008",
             ),
@@ -810,8 +810,7 @@ mod tests {
     #[test]
     fn creation_preserves_existing_counters_for_nonempty_document_kinds() {
         let (_directory, store) = initialized_store();
-        let body =
-            include_str!("../../.agents/skills/makespec/references/specification-template.md");
+        let body = SPECIFICATION_BODY;
 
         service::create(
             &store,
@@ -828,11 +827,7 @@ mod tests {
 
         for (kind, body, expected) in [
             (Kind::Decision, DECISION_BODY, "ADR-0010"),
-            (
-                Kind::Specification,
-                include_str!("../../.agents/skills/makespec/references/specification-template.md"),
-                "RFC-0013",
-            ),
+            (Kind::Specification, SPECIFICATION_BODY, "RFC-0013"),
         ] {
             let created = service::create(
                 &store,
@@ -850,11 +845,7 @@ mod tests {
     #[test]
     fn creation_restarts_empty_document_kinds_despite_cached_allocations() {
         for (kind, body, expected) in [
-            (
-                Kind::Specification,
-                include_str!("../../.agents/skills/makespec/references/specification-template.md"),
-                "RFC-0001",
-            ),
+            (Kind::Specification, SPECIFICATION_BODY, "RFC-0001"),
             (Kind::Decision, DECISION_BODY, "ADR-0001"),
         ] {
             let (directory, store) = initialized_store();

@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, ops::Range};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::Range,
+};
 
 use chrono::{Local, NaiveDate};
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
@@ -653,13 +656,7 @@ fn validate_specification_tables(
 
     let options_text = section_text(markdown, headings, "Options");
 
-    validate_comparison(
-        &collect_tables(options_text),
-        &criteria,
-        options_text,
-        complete,
-        &mut errors,
-    );
+    validate_options(options_text, &criteria, complete, &mut errors);
 
     errors
 }
@@ -741,19 +738,91 @@ fn validate_constraints(
     }
 }
 
+fn validate_options(
+    options_text: &str,
+    criteria: &BTreeMap<String, Criterion>,
+    complete: bool,
+    errors: &mut Vec<String>,
+) {
+    let themes: Vec<Heading> = collect_headings(options_text)
+        .into_iter()
+        .filter(|heading| heading.level == HeadingLevel::H3)
+        .collect();
+    let mut seen_criteria = BTreeSet::new();
+
+    if themes.is_empty() {
+        seen_criteria.extend(validate_comparison(
+            &collect_tables(options_text),
+            criteria,
+            options_text,
+            complete,
+            errors,
+        ));
+    } else {
+        let preamble = &options_text[..themes[0].range.start];
+
+        if !collect_tables(preamble).is_empty()
+            || preamble
+                .lines()
+                .any(|line| line.trim().starts_with("**Chosen option:**"))
+        {
+            errors.push(
+                "`## Options` comparisons and choices must be inside a named theme when using themes"
+                    .into(),
+            );
+        }
+
+        let mut names = BTreeSet::new();
+
+        for (index, theme) in themes.iter().enumerate() {
+            if theme.title.trim().is_empty()
+                || !names.insert(theme.title.trim().to_ascii_lowercase())
+            {
+                errors.push("option themes must have unique, non-empty names".into());
+            }
+
+            let end = themes
+                .get(index + 1)
+                .map_or(options_text.len(), |heading| heading.range.start);
+            let text = &options_text[theme.range.end..end];
+            let mut theme_errors = Vec::new();
+
+            seen_criteria.extend(validate_comparison(
+                &collect_tables(text),
+                criteria,
+                text,
+                complete,
+                &mut theme_errors,
+            ));
+            errors.extend(
+                theme_errors
+                    .into_iter()
+                    .map(|error| format!("option theme `{}`: {error}", theme.title)),
+            );
+        }
+    }
+
+    for criterion in criteria.keys() {
+        if complete && !seen_criteria.contains(criterion) {
+            errors.push(format!("comparison has no row for `{criterion}`"));
+        }
+    }
+}
+
 fn validate_comparison(
     tables: &[Table],
     criteria: &BTreeMap<String, Criterion>,
     options_text: &str,
     complete: bool,
     errors: &mut Vec<String>,
-) {
+) -> BTreeSet<String> {
     let choices: Vec<&str> = options_text
         .lines()
         .filter_map(|line| line.trim().strip_prefix("**Chosen option:**"))
         .map(str::trim)
         .collect();
     let chosen = choices.first().copied().unwrap_or_default();
+    let mut seen_criteria = BTreeSet::new();
 
     if choices.len() > 1 {
         errors.push("`## Options` must name at most one chosen option".into());
@@ -766,12 +835,12 @@ fn validate_comparison(
     let Some(comparison_table) = tables.first() else {
         errors.push("`## Options` is missing its comparison table".into());
 
-        return;
+        return seen_criteria;
     };
     let Some(headers) = comparison_table.first() else {
         errors.push("`## Options` table is empty".into());
 
-        return;
+        return seen_criteria;
     };
 
     if headers.len() < 3 || !headers[0].trim().eq_ignore_ascii_case("criterion id") {
@@ -785,7 +854,7 @@ fn validate_comparison(
         .skip(1)
         .map(|name| name.trim().to_string())
         .collect();
-    let mut unique_options = std::collections::BTreeSet::new();
+    let mut unique_options = BTreeSet::new();
 
     for option in &options {
         if option.is_empty() || !unique_options.insert(option.to_ascii_lowercase()) {
@@ -801,8 +870,6 @@ fn validate_comparison(
     {
         errors.push("`## Options` must name a chosen option that appears in the table".into());
     }
-
-    let mut seen_criteria = std::collections::BTreeSet::new();
 
     for row in comparison_table.iter().skip(1) {
         if row.len() != headers.len() {
@@ -876,11 +943,11 @@ fn validate_comparison(
         }
     }
 
-    for criterion in criteria.keys() {
-        if complete && !seen_criteria.contains(criterion) {
-            errors.push(format!("comparison has no row for `{criterion}`"));
-        }
+    if complete && seen_criteria.is_empty() {
+        errors.push("comparison table must assess at least one criterion".into());
     }
+
+    seen_criteria
 }
 
 fn table_rows<'a>(
@@ -1018,6 +1085,138 @@ mod tests {
             section_text(markdown, &headings, "Options").trim(),
             "Choices."
         );
+    }
+
+    const GROUPED_SPECIFICATION: &str = r#"## Requirements and constraints
+
+### Requirements
+
+| ID | Priority | Requirement |
+| --- | --- | --- |
+| FR-001 | MUST | Users can publish offers. |
+| NFR-001 | MUST | Clients support the required platforms. |
+
+### Constraints
+
+| ID | Constraint |
+| --- | --- |
+| C-001 | Use no AI providers. |
+
+## Options
+
+### User experience
+
+| Criterion ID | Moderated offers | Direct offers |
+| --- | --- | --- |
+| FR-001 | Fully meets - Reviewed offers are published. | Fully meets - Users publish immediately. |
+| C-001 | PASS - Review is manual. | PASS - Publication is deterministic. |
+
+**Chosen option:** Moderated offers
+
+### Technical stack
+
+| Criterion ID | Flutter | React Native | Native clients |
+| --- | --- | --- | --- |
+| NFR-001 | Fully meets - Targets all required platforms. | Fully meets - Includes a web client. | Fully meets - Separate clients cover each platform. |
+| C-001 | PASS - No AI dependency. | PASS - No AI dependency. | PASS - No AI dependency. |
+
+**Chosen option:** Flutter
+"#;
+
+    #[test]
+    fn specification_themes_validate_local_choices_and_collective_coverage() {
+        let headings = collect_headings(GROUPED_SPECIFICATION);
+        let errors = validate_specification_tables(GROUPED_SPECIFICATION, &headings, true);
+
+        assert!(errors.is_empty(), "{errors:?}");
+    }
+
+    #[test]
+    fn specification_themes_reject_incomplete_or_ineligible_choices() {
+        for (from, to, expected) in [
+            (
+                "**Chosen option:** Flutter",
+                "",
+                "must name a chosen option",
+            ),
+            (
+                "**Chosen option:** Flutter",
+                "**Chosen option:** Moderated offers",
+                "must name a chosen option",
+            ),
+            (
+                "Fully meets - Targets all required platforms.",
+                "Partially meets - Missing a required platform.",
+                "does not fully meet a MUST",
+            ),
+            (
+                "PASS - No AI dependency.",
+                "FAIL - Requires an AI provider.",
+                "fails a constraint",
+            ),
+            (
+                "| NFR-001 | Fully meets - Targets all required platforms. | Fully meets - Includes a web client. | Fully meets - Separate clients cover each platform. |",
+                "",
+                "comparison has no row for `NFR-001`",
+            ),
+            (
+                "### Technical stack",
+                "### User experience",
+                "unique, non-empty",
+            ),
+            (
+                "**Chosen option:** Flutter",
+                "**Chosen option:** Flutter\n\n**Chosen option:** Native clients",
+                "at most one chosen option",
+            ),
+            ("### Technical stack", "", "exactly one canonical table"),
+            ("### User experience", "", "inside a named theme"),
+            (
+                "## Options",
+                "## Options\n\n### Infrastructure\n\n| Criterion ID | Hosted | Self-hosted |\n| --- | --- | --- |\n\n**Chosen option:** Hosted",
+                "must assess at least one criterion",
+            ),
+            (
+                "| NFR-001 | Fully meets",
+                "| NFR-099 | Fully meets",
+                "unknown criterion `NFR-099`",
+            ),
+        ] {
+            let body = GROUPED_SPECIFICATION.replace(from, to);
+            let errors = validate_specification_tables(&body, &collect_headings(&body), true);
+
+            assert!(
+                errors.iter().any(|error| error.contains(expected)),
+                "expected {expected:?}, got {errors:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn comparison_option_count_has_a_minimum_but_no_fixed_target() {
+        let criteria = BTreeMap::from([("FR-001".into(), Criterion::Requirement("MUST".into()))]);
+
+        for count in 1..=5 {
+            let mut headers = vec!["Criterion ID".into()];
+            let mut row = vec!["FR-001".into()];
+
+            for number in 1..=count {
+                headers.push(format!("Approach {number}"));
+                row.push("Fully meets - Supports publication.".into());
+            }
+
+            let mut errors = Vec::new();
+
+            validate_comparison(
+                &[vec![headers, row]],
+                &criteria,
+                "**Chosen option:** Approach 1",
+                true,
+                &mut errors,
+            );
+
+            assert_eq!(errors.is_empty(), count >= 2, "{errors:?}");
+        }
     }
 
     #[test]

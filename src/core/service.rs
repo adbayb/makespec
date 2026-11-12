@@ -574,7 +574,7 @@ Create proposals from the bundled template and run `makespec check` after edits.
     }
 
     #[test]
-    fn templates_pass_creation_structure_but_require_completion() {
+    fn templates_require_completion_and_specification_candidates() {
         for (kind, body) in [
             (
                 Kind::Decision,
@@ -585,13 +585,25 @@ Create proposals from the bundled template and run `makespec check` after edits.
                 include_str!("../../.agents/skills/makespec/references/specification-template.md"),
             ),
         ] {
-            let new_document = NewDocument {
+            let mut new_document = NewDocument {
                 kind,
                 title: "Template record".into(),
                 slug: "template-record".into(),
                 date: "2026-11-09".into(),
                 body: body.into(),
             };
+            if kind == Kind::Specification {
+                let errors =
+                    validate_document_structure(&new_document.build(1, Status::Proposed).unwrap());
+
+                assert_eq!(errors, ["`## Options` is missing its comparison table"]);
+
+                new_document.body = new_document.body.replace(
+                    "## Options",
+                    "## Options\n\n| Criterion ID | List view | Card view |\n| --- | --- | --- |\n| FR-001 | | |\n| NFR-001 | | |\n| C-001 | | |",
+                ).replace("Selected candidate", "List view");
+            }
+
             let errors =
                 validate_document_structure(&new_document.build(1, Status::Proposed).unwrap());
 
