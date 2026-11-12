@@ -25,7 +25,11 @@ Keep this subsection only for genuine hard boundaries, such as a required platfo
 
 Identify the decision themes needed for an implementable proposal before listing candidates. Separate independent choices into named `###` subsections under Options, such as user experience and technical stack. For technical proposals, address stack and infrastructure choices when material to implementation; explain when an accepted record already settles them or they do not apply. Do not force unrelated choices into a single winner or enumerate every possible combination.
 
-Use one comparison table and one `**Chosen option:**` line per theme. For a single decision, the table and choice may sit directly under Options without a subsection. Discover and describe the materially distinct, plausible candidates before constructing each table. Derive its option columns from those candidates, not a preset count. Two is a minimum per theme, not a target or maximum; there is no default count. Let themes have different counts when their decision spaces differ. Do not truncate meaningful alternatives to match another table or pad a small decision space with redundant or implausible candidates.
+Use one comparison table and one `**Chosen option:**` line per theme. For a single decision, the table and choice may sit directly under Options without a subsection.
+
+Before building a table, make a working inventory of candidates for that theme. Beyond the first ideas, examine relevant differences in user behavior, architecture, technology, operations, and existing approaches as applicable to that decision. Include user-specified candidates and other materially distinct, plausible alternatives that address the same need, including options that may fail a criterion so the comparison shows why. Exclude duplicates and implausible options with a reason; do not present guesses as verified facts. If the inventory might be incomplete, label that uncertainty.
+
+Derive the option columns from the inventory. Two is a minimum per theme, not a target or maximum; there is no default count. Let themes have different counts when their decision spaces differ. Do not stop at an arbitrary shortlist, truncate meaningful alternatives to match another table, or pad a small decision space with redundant or implausible candidates.
 
 Include `No change` only when it represents a meaningful current-state alternative; omit it when it would add no useful comparison, such as for a greenfield project with no existing capability. When omitting `No change`, compare at least two distinct approaches that address the same need. Start each table with a `Criterion ID` column, followed by one column per candidate using its name as the header. Compare candidates against the same criteria within the theme. Include rows for every relevant requirement and constraint ID; the tables together must cover all IDs. Repeat shared criteria in each affected theme, with explanations scoped to that choice.
 
@@ -36,7 +40,7 @@ Fill each cell with `LABEL - explanation` and supporting evidence. Label assumpt
 
 **Chosen option:** Selected candidate
 
-Replace `Selected candidate` with one option per theme that fully meets every MUST requirement and passes every constraint assessed there. Copy its name exactly from that theme's table. Explain each choice and its tradeoffs using criterion IDs. Verify that the combined choices are compatible and together satisfy all MUST requirements and constraints; explain cross-theme dependencies rather than treating local eligibility as proof of compatibility. Before finishing, check each candidate set independently for missing meaningful alternatives and filler options. Do not calculate an aggregate score.
+Replace `Selected candidate` with one option per theme that fully meets every MUST requirement and passes every constraint assessed there. Copy its name exactly from that theme's table. Explain each choice and its tradeoffs using criterion IDs. Verify that the combined choices are compatible and together satisfy all MUST requirements and constraints; explain cross-theme dependencies rather than treating local eligibility as proof of compatibility. Before finishing, compare each table against its inventory and add any omitted plausible alternatives or explain their exclusion. Do not calculate an aggregate score.
 
 ## Design
 
