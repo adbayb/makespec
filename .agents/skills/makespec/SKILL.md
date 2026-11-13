@@ -5,7 +5,7 @@ license: MIT
 metadata:
     author: adbayb
     repository: adbayb/makespec
-    version: "1.1.1"
+    version: "1.1.2"
 ---
 
 # Makespec
@@ -22,9 +22,13 @@ Identify whether the request is to plan, review, validate, create, edit, or chan
 
 When the user explicitly invokes Makespec to create, specify, or build a product or feature, infer an authorized request to create a proposed RFC, even if they do not say "specification" or "RFC". Honor explicit plan-only, review-only, or no-write instructions instead. This inference authorizes the specification, not application implementation or acceptance.
 
-Treat each standalone request to create, specify, or build a product or feature as a fresh proposed RFC, even when its wording is identical to a completed request or an existing RFC covers the same requirements. The user need not say "new", name a different concept, or justify another record. Do not deduplicate creation requests or replace creation with "already covered", validation of an existing record, or a no-change report. Use existing records as context or references and leave them unchanged.
+For creation requests, inspect relevant existing RFCs, including proposed records, before selecting the concept. Distinguish open-ended ideation, where the agent chooses a product, from requests for a specific product or feature. The user need not say "new" to authorize creation.
 
-Reuse a record only when the current request asks to revise, continue, resume, or use that record, or answers clarification questions in its unfinished authoring task. A record ID alone may be context, not an edit instruction. Repeated creation wording after a completed task is a fresh request, not a continuation or a validation retry; apply the correction loop in step 4 only within the same unfinished task. Honor explicit instructions to avoid duplicates or reuse a record.
+For open-ended ideation, including a repeated prompt after a completed task, choose a materially different problem domain or intended user group and core workflow from existing proposals. Compare the candidate's problem, users, and main requirements with the inspected RFCs before allocating an ID. A new title, stack, wording, or link to a previous RFC does not make an equivalent concept distinct. State the meaningful difference in Context; link earlier records only when they have a substantive relationship, not merely because they came from the same prompt. If no distinct coherent concept satisfies the request, report the existing coverage and create no record rather than manufacturing novelty. Product differentiation does not establish market uniqueness or revenue probability; keep those claims subject to evidence.
+
+For a specific product or feature already substantively covered by an inspected RFC, report that record and create no duplicate unless the user explicitly requests a separate variant or replacement. Do not silently change its domain or users. A request with materially different scope can create a fresh proposed RFC while leaving earlier records unchanged.
+
+Reuse a record only when the current request asks to revise, continue, resume, or use that record, or answers clarification questions in its unfinished authoring task. A record ID alone may be context, not an edit instruction. Apply the correction loop in step 4 only within that unfinished task; route subsequent creation requests through the coverage and distinctness checks above. Honor explicit instructions to avoid duplicates or reuse a record.
 
 For CLI operations, read [the CLI reference](references/cli.md) before invoking commands from the project root. If `makespec` is unavailable on `PATH`, stop those operations and ask the user to install or configure it; do not substitute manual writes. Planning and supplied-content review can proceed without the CLI.
 
@@ -57,6 +61,8 @@ Use [Output](#output) for the requested operation. Report only observed results 
 ## Output
 
 For a plan, state the intended record or handoff, assumptions, blocking gaps, and that no records or application code were changed. For a review, give findings tied to the inspected content, state what evidence or context was unavailable, and confirm no records were changed. Say whether CLI validation ran; do not require it for a prose-only plan or review.
+
+When existing coverage makes creation unnecessary, identify the inspected RFC and the overlapping scope, state that no record was changed or ID allocated, and report any validation actually run. Do not imply that a proposed record is accepted or that a previous validation result was observed in this task.
 
 For record changes, use:
 
