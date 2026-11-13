@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/adbayb/makespec/compare/v0.4.1...v0.4.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* **skill:** avoid duplicate product proposals ([6194de5](https://github.com/adbayb/makespec/commit/6194de51fc11d3e2ecebd67aed40fb1c15d2e8b4))
+
 ## [0.4.1](https://github.com/adbayb/makespec/compare/v0.4.0...v0.4.1) (2026-11-12)
 
 
