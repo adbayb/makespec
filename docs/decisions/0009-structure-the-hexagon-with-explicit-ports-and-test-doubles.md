@@ -2,7 +2,7 @@
 id: ADR-0009
 title: Structure the hexagon with explicit ports and test doubles
 date: 2026-11-28
-status: proposed
+status: accepted
 ---
 
 # ADR-0009: Structure the hexagon with explicit ports and test doubles
@@ -33,6 +33,6 @@ The layout adds module files and a second implementation of the storage port tha
 
 ## References
 
-- [ADR-0006: Keep hexagonal boundaries within one binary](0006-keep-hexagonal-boundaries-within-one-binary.md) is the decision this record would supersede once accepted.
+- [ADR-0006: Keep hexagonal boundaries within one binary](0006-keep-hexagonal-boundaries-within-one-binary.md) is the decision this record supersedes.
 - [Hexagon wiring](../../src/hexagon/makespec.rs) and [production startup](../../src/startup/cli.rs) implement the layout.
 - [Hexagonal architecture explained](https://jmgarridopaz.github.io/content/hexagonalarchitecture-ig/intro.html) describes the driver and driven port vocabulary.

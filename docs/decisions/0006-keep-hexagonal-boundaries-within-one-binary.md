@@ -2,7 +2,8 @@
 id: ADR-0006
 title: Keep hexagonal boundaries within one binary
 date: 2026-11-09
-status: accepted
+status: superseded
+superseded_by: ADR-0009
 ---
 
 # ADR-0006: Keep hexagonal boundaries within one binary
@@ -33,4 +34,4 @@ The storage port adds an internal boundary that contributors must preserve. Keep
 - [Contributor instructions](../../AGENTS.md) define repository coding and check requirements.
 - [Contribution conventions](../../CONTRIBUTING.md) require the existing hexagonal boundaries.
 - [Storage port](../../src/hexagon/ports/driven/for_storing_documents.rs) defines the dependency boundary.
-- [ADR-0009: Structure the hexagon with explicit ports and test doubles](0009-structure-the-hexagon-with-explicit-ports-and-test-doubles.md) proposes the layout that replaces this one.
+- [ADR-0009: Structure the hexagon with explicit ports and test doubles](0009-structure-the-hexagon-with-explicit-ports-and-test-doubles.md) supersedes this decision with explicit ports and test doubles.

@@ -113,7 +113,7 @@ Use normal workspace tools for body edits. Before replacing a record, compare it
 
 ### Implementation boundaries
 
-Keep one Cargo binary and the hexagonal boundaries proposed in [ADR-0009](../decisions/0009-structure-the-hexagon-with-explicit-ports-and-test-doubles.md):
+Keep one Cargo binary and the hexagonal boundaries defined in [ADR-0009](../decisions/0009-structure-the-hexagon-with-explicit-ports-and-test-doubles.md):
 
 - `src/hexagon/document.rs` owns document construction, parsing, and validation.
 - `src/hexagon/` holds one file per use case and implements the `ForManagingDocuments` driver port in `makespec.rs`.
