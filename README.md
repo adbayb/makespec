@@ -158,14 +158,17 @@ The skill guides agents through project-record work. Read its [workflow](.agents
 
 ## 🏗️ Architecture
 
-The CLI calls core workflows and document rules through a hexagonal design. The filesystem adapter implements the storage port:
+The CLI adapter drives the hexagon (`src/hexagon/`) through its driver port. The hexagon holds the use cases and document rules and depends on driven ports that the filesystem and embedded skill adapters implement:
 
 ```mermaid
 flowchart LR
-    CLI["CLI"] --> Workflows["Core workflows"]
-    Workflows --> Rules["Document rules"]
-    Workflows --> Port["ProjectStore port"]
-    Filesystem["Filesystem adapter"] -. implements .-> Port
+    CLI["CLI adapter"] --> Driver["ForManagingDocuments port"]
+    Driver --> Hexagon["Hexagon use cases"]
+    Hexagon --> Rules["Document rules"]
+    Hexagon --> Storage["ForStoringDocuments port"]
+    Hexagon --> Skill["ForObtainingSkillFiles port"]
+    Filesystem["Filesystem adapter"] -. implements .-> Storage
+    Embedded["Embedded skill adapter"] -. implements .-> Skill
     Filesystem --> Records["Markdown records"]
 ```
 

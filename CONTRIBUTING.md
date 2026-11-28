@@ -20,7 +20,7 @@ Read [RFC-0001: Makespec product requirements document (PRD)](docs/specification
 ## 🗂️ Conventions
 
 - Follow the Rust formatting and spacing rules in [AGENTS.md](AGENTS.md).
-- Preserve the hexagonal boundaries: keep document rules and workflows in `src/core/`, filesystem operations in `src/adapters/`, and CLI interaction in `src/startup/`.
+- Preserve the hexagonal boundaries in [ADR-0009](docs/decisions/0009-structure-the-hexagon-with-explicit-ports-and-test-doubles.md): document rules, use cases, and ports in `src/hexagon/`, one adapter per port in `src/adapters/<tech>/`, and wiring in `src/startup/`. The hexagon imports adapters only from test code.
 - Preserve bounded reads, path validation, and protection against concurrent edits.
 - Keep documentation and bundled agent instructions consistent with changes to commands or document formats.
 

@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     fmt::Write as _,
     fs::{self, File, OpenOptions},
     io::{Read, Write},
@@ -8,13 +9,13 @@ use std::{
 use sha2::{Digest, Sha256};
 use tempfile::{Builder, NamedTempFile};
 
-use crate::core::{
+use crate::hexagon::{
     document::{
         Document, DocumentSummary, Kind, MAX_DOCUMENT_BYTES, NewDocument, Status, parse_document,
         parse_id, parse_metadata_prefix,
     },
     error::{MakespecError, Result},
-    service::{ProjectFile, ProjectStore},
+    ports::driven::for_storing_documents::{ForStoringDocuments, ProjectFile},
 };
 
 const MAX_STATE_BYTES: u64 = 1024;
@@ -30,6 +31,15 @@ pub(crate) struct FilesystemStore {
 struct Counters {
     decision: u32,
     specification: u32,
+}
+
+impl Counters {
+    fn get_mut(&mut self, kind: Kind) -> &mut u32 {
+        match kind {
+            Kind::Decision => &mut self.decision,
+            Kind::Specification => &mut self.specification,
+        }
+    }
 }
 
 impl FilesystemStore {
@@ -82,26 +92,12 @@ impl FilesystemStore {
         fs::create_dir_all(&configured_base)?;
         let base = fs::canonicalize(configured_base)?;
         let app_directory = base.join("makespec");
-        fs::create_dir_all(&app_directory)?;
-        let app_metadata = fs::symlink_metadata(&app_directory)?;
 
-        if app_metadata.file_type().is_symlink() || !app_metadata.is_dir() {
-            return Err(MakespecError::Invalid(format!(
-                "unsafe Makespec cache directory {}",
-                app_directory.display()
-            )));
-        }
+        create_real_directory(&app_directory, "Makespec cache directory")?;
 
         let directory = app_directory.join("locks");
-        fs::create_dir_all(&directory)?;
-        let metadata = fs::symlink_metadata(&directory)?;
 
-        if metadata.file_type().is_symlink() || !metadata.is_dir() {
-            return Err(MakespecError::Invalid(format!(
-                "unsafe lock directory {}",
-                directory.display()
-            )));
-        }
+        create_real_directory(&directory, "lock directory")?;
 
         #[cfg(unix)]
         {
@@ -215,11 +211,7 @@ impl FilesystemStore {
             documents.push(parse_document(&content, relative)?);
         }
 
-        documents.sort_by_key(|document| {
-            let (prefix, number) = parse_id(&document.metadata.id).unwrap_or(("", 0));
-
-            (prefix.to_string(), number)
-        });
+        documents.sort_by_key(|document| catalog_order(&document.metadata.id));
 
         Ok(documents)
     }
@@ -264,88 +256,84 @@ impl FilesystemStore {
 
         Ok(())
     }
+}
 
-    fn read_counters(&self, state_path: &Path) -> Result<Counters> {
-        let content = match read_bounded(state_path, MAX_STATE_BYTES) {
-            Ok(content) => content,
-            Err(MakespecError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(Counters::default());
-            }
-            Err(error) => return Err(error),
-        };
-
-        let mut counters = Counters::default();
-        let mut seen = std::collections::BTreeSet::new();
-
-        for line in content.lines() {
-            let (kind, value) = line.split_once('=').ok_or_else(|| {
-                MakespecError::Invalid("corrupt Makespec ID counter state".into())
-            })?;
-            let value = value
-                .parse::<u32>()
-                .map_err(|_| MakespecError::Invalid("corrupt Makespec ID counter state".into()))?;
-
-            if !seen.insert(kind) {
-                return Err(MakespecError::Invalid(
-                    "duplicate entry in Makespec ID counter state".into(),
-                ));
-            }
-
-            match kind {
-                "adr" => counters.decision = value,
-                "rfc" => counters.specification = value,
-                _ => {
-                    return Err(MakespecError::Invalid(
-                        "unknown entry in Makespec ID counter state".into(),
-                    ));
-                }
-            }
+fn read_counters(state_path: &Path) -> Result<Counters> {
+    let content = match read_bounded(state_path, MAX_STATE_BYTES) {
+        Ok(content) => content,
+        Err(MakespecError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(Counters::default());
         }
+        Err(error) => return Err(error),
+    };
 
-        if !content.is_empty() && seen.len() != 2 {
+    let mut counters = Counters::default();
+    let mut seen = BTreeSet::new();
+
+    for line in content.lines() {
+        let (kind, value) = line
+            .split_once('=')
+            .ok_or_else(|| MakespecError::Invalid("corrupt Makespec ID counter state".into()))?;
+        let value = value
+            .parse::<u32>()
+            .map_err(|_| MakespecError::Invalid("corrupt Makespec ID counter state".into()))?;
+
+        if !seen.insert(kind) {
             return Err(MakespecError::Invalid(
-                "incomplete Makespec ID counter state".into(),
+                "duplicate entry in Makespec ID counter state".into(),
             ));
         }
 
-        Ok(counters)
-    }
-
-    fn write_counters(&self, state_path: &Path, counters: &Counters) -> Result<()> {
-        let content = format!(
-            "adr={}\nrfc={}\n",
-            counters.decision, counters.specification
-        );
-        let temp = stage_file(state_path, &content)?;
-
-        temp.persist(state_path)
-            .map_err(|error| MakespecError::Io(error.error))?;
-
-        Ok(())
-    }
-
-    fn raise_counters(&self, state_path: &Path, documents: &[Document]) -> Result<()> {
-        let mut counters = self.read_counters(state_path)?;
-
-        for document in documents {
-            let (prefix, number) = parse_id(&document.metadata.id)?;
-            let counter = if prefix == "ADR" {
-                &mut counters.decision
-            } else {
-                &mut counters.specification
-            };
-
-            *counter = (*counter).max(number);
+        match kind {
+            "adr" => counters.decision = value,
+            "rfc" => counters.specification = value,
+            _ => {
+                return Err(MakespecError::Invalid(
+                    "unknown entry in Makespec ID counter state".into(),
+                ));
+            }
         }
-
-        self.write_counters(state_path, &counters)
     }
+
+    if !content.is_empty() && seen.len() != 2 {
+        return Err(MakespecError::Invalid(
+            "incomplete Makespec ID counter state".into(),
+        ));
+    }
+
+    Ok(counters)
 }
 
-impl ProjectStore for FilesystemStore {
-    fn initialize(&self, files: &[ProjectFile]) -> Result<()> {
+fn write_counters(state_path: &Path, counters: &Counters) -> Result<()> {
+    let content = format!(
+        "adr={}\nrfc={}\n",
+        counters.decision, counters.specification
+    );
+    let temp = stage_file(state_path, &content)?;
+
+    temp.persist(state_path)
+        .map_err(|error| MakespecError::Io(error.error))?;
+
+    Ok(())
+}
+
+fn raise_counters(state_path: &Path, documents: &[Document]) -> Result<()> {
+    let mut counters = read_counters(state_path)?;
+
+    for document in documents {
+        let (kind, number) = parse_id(&document.metadata.id)?;
+        let counter = counters.get_mut(kind);
+
+        *counter = (*counter).max(number);
+    }
+
+    write_counters(state_path, &counters)
+}
+
+impl ForStoringDocuments for FilesystemStore {
+    fn create_files(&self, files: &[ProjectFile]) -> Result<()> {
         self.with_lock(|state_path| {
-            let mut seen = std::collections::BTreeSet::new();
+            let mut seen = BTreeSet::new();
             let mut pending = Vec::new();
 
             for kind in [Kind::Decision, Kind::Specification] {
@@ -374,14 +362,6 @@ impl ProjectStore for FilesystemStore {
                         let existing = read_bounded(&destination, MAX_DOCUMENT_BYTES)?;
 
                         if existing == file.content {
-                            continue;
-                        }
-
-                        if let Some(seed) = &file.seed {
-                            let parsed = parse_document(&existing, file.relative_path.clone())?;
-
-                            seed.validate(&parsed, &file.relative_path)?;
-
                             continue;
                         }
 
@@ -429,24 +409,24 @@ impl ProjectStore for FilesystemStore {
                     return Err(MakespecError::Invalid(message));
                 }
 
-                published.push((destination, expected.to_string()));
+                published.push((destination, expected));
             }
 
             let documents = self.documents_in(false)?;
 
-            self.raise_counters(state_path, &documents)
+            raise_counters(state_path, &documents)
         })
     }
 
-    fn existing_documents(&self) -> Result<Vec<Document>> {
+    fn get_existing_documents(&self) -> Result<Vec<Document>> {
         self.documents_in(false)
     }
 
-    fn documents(&self) -> Result<Vec<Document>> {
+    fn get_documents(&self) -> Result<Vec<Document>> {
         self.documents_in(true)
     }
 
-    fn catalog(&self) -> Result<Vec<DocumentSummary>> {
+    fn get_summaries(&self) -> Result<Vec<DocumentSummary>> {
         let mut summaries = Vec::new();
 
         for path in self.document_paths(true)? {
@@ -460,18 +440,14 @@ impl ProjectStore for FilesystemStore {
             });
         }
 
-        summaries.sort_by_key(|summary| {
-            let (prefix, number) = parse_id(&summary.metadata.id).unwrap_or(("", 0));
-
-            (prefix.to_string(), number)
-        });
+        summaries.sort_by_key(|summary| catalog_order(&summary.metadata.id));
 
         Ok(summaries)
     }
 
-    fn document(&self, id: &str) -> Result<Document> {
+    fn get_document(&self, id: &str) -> Result<Document> {
         let summary = self
-            .catalog()?
+            .get_summaries()?
             .into_iter()
             .find(|summary| summary.metadata.id == id)
             .ok_or_else(|| MakespecError::NotFound(id.to_string()))?;
@@ -483,21 +459,17 @@ impl ProjectStore for FilesystemStore {
 
     fn create_proposal(&self, new_document: NewDocument) -> Result<Document> {
         self.with_lock(|state_path| {
-            let documents = self.catalog()?;
-            let mut counters = self.read_counters(state_path)?;
+            let documents = self.get_summaries()?;
+            let mut counters = read_counters(state_path)?;
             let max_number = documents
                 .iter()
                 .filter_map(|document| {
-                    let (prefix, number) = parse_id(&document.metadata.id).ok()?;
-                    (prefix == new_document.kind.id_prefix()).then_some(number)
+                    let (kind, number) = parse_id(&document.metadata.id).ok()?;
+                    (kind == new_document.kind).then_some(number)
                 })
                 .max()
                 .unwrap_or(0);
-            let current = if new_document.kind == Kind::Decision {
-                &mut counters.decision
-            } else {
-                &mut counters.specification
-            };
+            let current = counters.get_mut(new_document.kind);
 
             *current = if max_number == 0 {
                 0
@@ -509,7 +481,7 @@ impl ProjectStore for FilesystemStore {
             })?;
 
             *current = number;
-            self.write_counters(state_path, &counters)?;
+            write_counters(state_path, &counters)?;
 
             let document = new_document.build(number, Status::Proposed)?;
             let destination = self.ensure_safe_parent(&document.path, false)?;
@@ -527,7 +499,7 @@ impl ProjectStore for FilesystemStore {
         })
     }
 
-    fn replace(&self, previous: &Document, replacement: &Document) -> Result<()> {
+    fn update_document(&self, previous: &Document, replacement: &Document) -> Result<()> {
         if previous.path != replacement.path
             || previous.metadata.id != replacement.metadata.id
             || previous.metadata.date != replacement.metadata.date
@@ -571,6 +543,25 @@ fn stage_file(destination: &Path, content: &str) -> Result<NamedTempFile> {
     temp.as_file().sync_all()?;
 
     Ok(temp)
+}
+
+fn catalog_order(id: &str) -> (Option<Kind>, u32) {
+    parse_id(id).map_or((None, 0), |(kind, number)| (Some(kind), number))
+}
+
+fn create_real_directory(directory: &Path, label: &str) -> Result<()> {
+    fs::create_dir_all(directory)?;
+
+    let metadata = fs::symlink_metadata(directory)?;
+
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(MakespecError::Invalid(format!(
+            "unsafe {label} {}",
+            directory.display()
+        )));
+    }
+
+    Ok(())
 }
 
 fn cache_directory() -> Result<PathBuf> {
@@ -675,7 +666,7 @@ fn read_prefix(path: &Path, limit: u64) -> Result<String> {
         .map_err(|_| MakespecError::Invalid(format!("file is not UTF-8: {}", path.display())))
 }
 
-fn rollback(published: &[(PathBuf, String)]) -> Vec<String> {
+fn rollback(published: &[(PathBuf, &str)]) -> Vec<String> {
     published
         .iter()
         .filter_map(|(path, expected)| match fs::read_to_string(path) {
@@ -693,23 +684,59 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::{adapters::embedded, core::service};
+    use crate::{
+        adapters::embedded::for_obtaining_skill_files::EmbeddedSkillFiles,
+        hexagon::{
+            Makespec,
+            document::{slugify, update_metadata},
+            ports::driver::for_managing_documents::ForManagingDocuments,
+        },
+    };
 
     const DECISION_BODY: &str = "## Context\n\nA focused decision is needed.\n\n## Decision\n\nUse the proposed approach.\n\n## Consequences\n\nThe choice is documented.";
     const SPECIFICATION_BODY: &str = "## Context\n\nBrowse local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Browse record titles. |\n\n## Options\n\n| Criterion ID | List view | Card view |\n| --- | --- | --- |\n| FR-001 | | |";
 
     fn initialized_store() -> (tempfile::TempDir, FilesystemStore) {
         let directory = tempfile::tempdir().unwrap();
+
+        initialize(directory.path()).unwrap();
+
         let store = FilesystemStore::new(directory.path()).unwrap();
-        service::initialize(&store, "2026-11-09", embedded::SKILL_FILES).unwrap();
 
         (directory, store)
+    }
+
+    fn makespec(path: &Path) -> Makespec<FilesystemStore, EmbeddedSkillFiles> {
+        Makespec::new(FilesystemStore::new(path).unwrap(), EmbeddedSkillFiles)
+    }
+
+    fn initialize(path: &Path) -> Result<()> {
+        makespec(path).initialize_project("2026-11-09")
+    }
+
+    fn check(path: &Path) -> Vec<String> {
+        makespec(path).check_documents().unwrap()
+    }
+
+    fn create(
+        store: &FilesystemStore,
+        kind: Kind,
+        title: String,
+        body: String,
+    ) -> Result<Document> {
+        store.create_proposal(NewDocument {
+            kind,
+            slug: slugify(&title)?,
+            title,
+            date: "2026-11-09".into(),
+            body,
+        })
     }
 
     #[test]
     fn initialization_creates_only_the_adoption_decision_and_is_idempotent() {
         let (directory, store) = initialized_store();
-        let original = store.document("ADR-0001").unwrap().raw;
+        let original = store.get_document("ADR-0001").unwrap().raw;
 
         assert_eq!(
             fs::read_dir(directory.path().join("docs/specifications"))
@@ -723,23 +750,22 @@ mod tests {
                 .is_empty()
         );
 
-        service::initialize(&store, "2026-11-09", embedded::SKILL_FILES).unwrap();
+        initialize(directory.path()).unwrap();
 
-        assert!(service::check(&store).unwrap().is_empty());
-        assert_eq!(service::list(&store).unwrap().len(), 1);
-        assert_eq!(store.document("ADR-0001").unwrap().raw, original);
+        assert!(check(directory.path()).is_empty());
+        assert_eq!(store.get_summaries().unwrap().len(), 1);
+        assert_eq!(store.get_document("ADR-0001").unwrap().raw, original);
     }
 
     #[test]
     fn initialization_preserves_existing_specifications_and_their_sequence() {
         let (directory, store) = initialized_store();
         let body = SPECIFICATION_BODY;
-        let specification = service::create(
+        let specification = create(
             &store,
             Kind::Specification,
             "Project functionality".into(),
             body.into(),
-            "2026-11-09",
         )
         .unwrap();
 
@@ -748,17 +774,19 @@ mod tests {
         let placeholder = directory.path().join("docs/specifications/.gitkeep");
 
         fs::remove_file(&placeholder).unwrap();
-        service::initialize(&store, "2026-11-09", embedded::SKILL_FILES).unwrap();
+        initialize(directory.path()).unwrap();
 
         assert!(!placeholder.exists());
-        assert_eq!(store.document("RFC-0001").unwrap().raw, specification.raw);
+        assert_eq!(
+            store.get_document("RFC-0001").unwrap().raw,
+            specification.raw
+        );
 
-        let next = service::create(
+        let next = create(
             &store,
             Kind::Specification,
             "More functionality".into(),
             body.into(),
-            "2026-11-09",
         )
         .unwrap();
 
@@ -783,12 +811,11 @@ mod tests {
                     let store = Arc::clone(&store);
 
                     std::thread::spawn(move || {
-                        service::create(
+                        create(
                             store.as_ref(),
                             kind,
                             format!("Concurrent {kind} {index}"),
                             body.to_string(),
-                            "2026-11-09",
                         )
                         .unwrap()
                         .metadata
@@ -812,12 +839,11 @@ mod tests {
         let (_directory, store) = initialized_store();
         let body = SPECIFICATION_BODY;
 
-        service::create(
+        create(
             &store,
             Kind::Specification,
             "Existing functionality".into(),
             body.into(),
-            "2026-11-09",
         )
         .unwrap();
 
@@ -829,14 +855,7 @@ mod tests {
             (Kind::Decision, DECISION_BODY, "ADR-0010"),
             (Kind::Specification, SPECIFICATION_BODY, "RFC-0013"),
         ] {
-            let created = service::create(
-                &store,
-                kind,
-                format!("New {kind}"),
-                body.into(),
-                "2026-11-09",
-            )
-            .unwrap();
+            let created = create(&store, kind, format!("New {kind}"), body.into()).unwrap();
 
             assert_eq!(created.metadata.id, expected);
         }
@@ -849,30 +868,17 @@ mod tests {
             (Kind::Decision, DECISION_BODY, "ADR-0001"),
         ] {
             let (directory, store) = initialized_store();
-            service::create(
-                &store,
-                kind,
-                "Removed record".into(),
-                body.into(),
-                "2026-11-09",
-            )
-            .unwrap();
+            create(&store, kind, "Removed record".into(), body.into()).unwrap();
 
-            for document in store.catalog().unwrap() {
+            for document in store.get_summaries().unwrap() {
                 if document.metadata.id.starts_with(kind.id_prefix()) {
                     fs::remove_file(directory.path().join(document.path)).unwrap();
                 }
             }
 
             let reopened = FilesystemStore::new(directory.path()).unwrap();
-            let replacement = service::create(
-                &reopened,
-                kind,
-                "First visible record".into(),
-                body.into(),
-                "2026-11-09",
-            )
-            .unwrap();
+            let replacement =
+                create(&reopened, kind, "First visible record".into(), body.into()).unwrap();
 
             assert_eq!(replacement.metadata.id, expected);
         }
@@ -882,23 +888,21 @@ mod tests {
     fn creation_conflicts_preserve_existing_files_and_reserved_ids() {
         let (directory, store) = initialized_store();
         let destination = directory.path().join("docs/decisions/0002-collision.md");
-        let existing = store.document("ADR-0001").unwrap().raw;
+        let existing = store.get_document("ADR-0001").unwrap().raw;
 
         fs::write(&destination, &existing).unwrap();
 
         assert!(
-            service::check(&store)
-                .unwrap()
+            check(directory.path())
                 .iter()
                 .any(|error| error.contains("duplicate"))
         );
         assert!(matches!(
-            service::create(
+            create(
                 &store,
                 Kind::Decision,
                 "Collision".into(),
                 DECISION_BODY.into(),
-                "2026-11-09"
             ),
             Err(MakespecError::AlreadyExists(_))
         ));
@@ -910,12 +914,11 @@ mod tests {
 
         fs::remove_file(destination).unwrap();
 
-        let created = service::create(
+        let created = create(
             &store,
             Kind::Decision,
             "After collision".into(),
             DECISION_BODY.into(),
-            "2026-11-09",
         )
         .unwrap();
 
@@ -923,33 +926,20 @@ mod tests {
     }
 
     #[test]
-    fn superseding_requires_an_accepted_same_kind_replacement() {
+    fn updates_replace_unchanged_documents_and_reject_external_edits() {
         let (_directory, store) = initialized_store();
-        let replacement = service::create(
-            &store,
-            Kind::Decision,
-            "A replacement decision".into(),
-            DECISION_BODY.into(),
-            "2026-11-09",
-        )
-        .unwrap();
+        let current = store.get_document("ADR-0001").unwrap();
+        let mut metadata = current.metadata.clone();
+        metadata.status = Status::Deprecated;
+        let replacement = update_metadata(&current, metadata).unwrap();
 
-        service::change_status(&store, &replacement.metadata.id, Status::Proposed, None).unwrap();
-        service::change_status(&store, &replacement.metadata.id, Status::Accepted, None).unwrap();
+        store.update_document(&current, &replacement).unwrap();
 
-        let superseded = service::change_status(
-            &store,
-            "ADR-0001",
-            Status::Superseded,
-            Some(&replacement.metadata.id),
-        )
-        .unwrap();
-
-        assert_eq!(
-            superseded.metadata.superseded_by.as_deref(),
-            Some(replacement.metadata.id.as_str())
-        );
-        assert!(service::check(&store).unwrap().is_empty());
+        assert_eq!(store.get_document("ADR-0001").unwrap().raw, replacement.raw);
+        assert!(matches!(
+            store.update_document(&current, &replacement),
+            Err(MakespecError::ConcurrentModification(_))
+        ));
     }
 
     #[test]
@@ -965,8 +955,8 @@ mod tests {
 
         fs::write(path, content).unwrap();
 
-        assert_eq!(service::list(&store).unwrap().len(), 2);
-        assert!(store.document("ADR-0002").is_err());
+        assert_eq!(store.get_summaries().unwrap().len(), 2);
+        assert!(store.get_document("ADR-0002").is_err());
     }
 
     #[test]
@@ -976,20 +966,20 @@ mod tests {
 
         fs::create_dir_all(directory.path().join("docs/decisions")).unwrap();
 
-        assert!(store.existing_documents().unwrap().is_empty());
+        assert!(store.get_existing_documents().unwrap().is_empty());
         assert!(matches!(
-            store.documents(),
+            store.get_documents(),
             Err(MakespecError::NotInitialized)
         ));
         assert!(matches!(
-            store.catalog(),
+            store.get_summaries(),
             Err(MakespecError::NotInitialized)
         ));
 
         fs::create_dir(directory.path().join("docs/specifications")).unwrap();
 
-        assert!(store.documents().unwrap().is_empty());
-        assert!(store.catalog().unwrap().is_empty());
+        assert!(store.get_documents().unwrap().is_empty());
+        assert!(store.get_summaries().unwrap().is_empty());
     }
 
     #[test]
@@ -1000,8 +990,8 @@ mod tests {
         fs::remove_file(&placeholder).unwrap();
         fs::create_dir(&placeholder).unwrap();
 
-        assert!(store.documents().is_err());
-        assert!(store.catalog().is_err());
+        assert!(store.get_documents().is_err());
+        assert!(store.get_summaries().is_err());
     }
 
     #[test]
@@ -1010,19 +1000,19 @@ mod tests {
         let unexpected = directory.path().join("docs/decisions/unexpected.txt");
         let _staged = stage_file(&unexpected, "unfinished content").unwrap();
 
-        assert_eq!(store.documents().unwrap().len(), 1);
-        assert_eq!(store.catalog().unwrap().len(), 1);
+        assert_eq!(store.get_documents().unwrap().len(), 1);
+        assert_eq!(store.get_summaries().unwrap().len(), 1);
 
         fs::write(&unexpected, "not a document").unwrap();
 
-        assert!(store.documents().is_err());
-        assert!(store.catalog().is_err());
+        assert!(store.get_documents().is_err());
+        assert!(store.get_summaries().is_err());
 
         fs::remove_file(&unexpected).unwrap();
         fs::create_dir(unexpected.with_extension("md")).unwrap();
 
-        assert!(store.documents().is_err());
-        assert!(store.catalog().is_err());
+        assert!(store.get_documents().is_err());
+        assert!(store.get_summaries().is_err());
     }
 
     #[cfg(unix)]
@@ -1041,10 +1031,9 @@ mod tests {
             let files = [ProjectFile {
                 relative_path: "docs/decisions/0001-example.md".into(),
                 content: "document".into(),
-                seed: None,
             }];
 
-            assert!(store.initialize(&files).is_err());
+            assert!(store.create_files(&files).is_err());
             assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
         }
     }

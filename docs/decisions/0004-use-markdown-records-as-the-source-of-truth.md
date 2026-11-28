@@ -27,6 +27,6 @@ Authors can make invalid external edits, so check must report structural errors.
 
 ## References
 
-- [Document rules](../../src/core/document.rs) define metadata, parsing, and rendering.
+- [Document rules](../../src/hexagon/document.rs) define metadata, parsing, and rendering.
 - [Specification template](../../.agents/skills/makespec/references/specification-template.md) defines canonical specification structure and comparison labels.
 - [ADR-0001: Use Makespec to manage decisions and specifications](0001-use-makespec-to-manage-decisions-and-specifications.md) adopts Makespec and the two record types.
