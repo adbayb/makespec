@@ -113,15 +113,15 @@ Use normal workspace tools for body edits. Before replacing a record, compare it
 
 ### Implementation boundaries
 
-Keep one Cargo binary and the existing hexagonal boundaries:
+Keep one Cargo binary and the hexagonal boundaries proposed in [ADR-0009](../decisions/0009-structure-the-hexagon-with-explicit-ports-and-test-doubles.md):
 
 - `src/hexagon/document.rs` owns document construction, parsing, and validation.
-- `src/hexagon/service.rs` owns use cases.
-- `src/hexagon/ports.rs` owns the `ProjectStore` port.
-- `src/adapters/` implements filesystem access and supplies embedded skill assets.
-- `src/startup/cli.rs` composes adapters and handles terminal input/output.
+- `src/hexagon/` holds one file per use case and implements the `ForManagingDocuments` driver port in `makespec.rs`.
+- `src/hexagon/ports/` defines the driver port and the `ForStoringDocuments` and `ForObtainingSkillFiles` driven ports.
+- `src/adapters/<tech>/` implements each port: `cli` handles terminal input/output, `filesystem` stores documents, `embedded` supplies skill assets, and test-only `fake` adapters keep documents in memory.
+- `src/startup/cli.rs` composes the adapters and the hexagon.
 
-Pass the operation date into use cases. Keep filesystem and terminal effects outside document rules; test pure rules without I/O and storage workflows with temporary directories. Add no public library, provider interface, generic repository framework, or speculative abstraction.
+Pass the operation date into use cases. Keep filesystem and terminal effects outside document rules; test pure rules without I/O, use cases with in-memory doubles, and the filesystem adapter with temporary directories. Add no public library, provider interface, generic repository framework, or speculative abstraction.
 
 ### Safety and distribution
 
@@ -164,5 +164,5 @@ Removing the tool requires no data export. Records remain ordinary Markdown avai
 - [Decision template](../../.agents/skills/makespec/references/decision-template.md) and [specification template](../../.agents/skills/makespec/references/specification-template.md) define body structure and comparison grammar.
 - [Makespec skill](../../.agents/skills/makespec/SKILL.md) defines authoring, planning, and approval boundaries.
 - [Contribution guide](../../CONTRIBUTING.md) defines development checks, benchmarks, and releases.
-- [Document rules](../../src/hexagon/document.rs), [hexagon workflows](../../src/hexagon/service.rs), and [filesystem adapter](../../src/adapters/filesystem.rs) implement the product contracts.
+- [Document rules](../../src/hexagon/document.rs), [hexagon wiring](../../src/hexagon/makespec.rs), and [filesystem adapter](../../src/adapters/filesystem/for_storing_documents.rs) implement the product contracts.
 - [CLI tests](../../tests/cli.rs) and [CI workflow](../../.github/workflows/ci.yml) provide executable checks.

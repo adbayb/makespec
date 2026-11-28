@@ -25,6 +25,6 @@ The cache must remain writable. Deleting counter state or changing the canonical
 
 ## References
 
-- [Filesystem adapter](../../src/adapters/filesystem.rs) implements locking, cache identity, and counter persistence.
+- [Filesystem adapter](../../src/adapters/filesystem/for_storing_documents.rs) implements locking, cache identity, and counter persistence.
 - [Document rules](../../src/hexagon/document.rs) define canonical IDs and numeric bounds.
-- [Filesystem tests](../../src/adapters/filesystem.rs) cover concurrent allocation and gaps after failed publication.
+- [Filesystem tests](../../src/adapters/filesystem/for_storing_documents.rs) cover concurrent allocation and gaps after failed publication.

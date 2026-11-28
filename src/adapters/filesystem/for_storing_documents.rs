@@ -15,7 +15,7 @@ use crate::hexagon::{
         parse_id, parse_metadata_prefix,
     },
     error::{MakespecError, Result},
-    ports::{ProjectFile, ProjectStore},
+    ports::driven::for_storing_documents::{ForStoringDocuments, ProjectFile},
 };
 
 const MAX_STATE_BYTES: u64 = 1024;
@@ -330,8 +330,8 @@ fn raise_counters(state_path: &Path, documents: &[Document]) -> Result<()> {
     write_counters(state_path, &counters)
 }
 
-impl ProjectStore for FilesystemStore {
-    fn initialize(&self, files: &[ProjectFile]) -> Result<()> {
+impl ForStoringDocuments for FilesystemStore {
+    fn create_files(&self, files: &[ProjectFile]) -> Result<()> {
         self.with_lock(|state_path| {
             let mut seen = BTreeSet::new();
             let mut pending = Vec::new();
@@ -418,15 +418,15 @@ impl ProjectStore for FilesystemStore {
         })
     }
 
-    fn existing_documents(&self) -> Result<Vec<Document>> {
+    fn get_existing_documents(&self) -> Result<Vec<Document>> {
         self.documents_in(false)
     }
 
-    fn documents(&self) -> Result<Vec<Document>> {
+    fn get_documents(&self) -> Result<Vec<Document>> {
         self.documents_in(true)
     }
 
-    fn catalog(&self) -> Result<Vec<DocumentSummary>> {
+    fn get_summaries(&self) -> Result<Vec<DocumentSummary>> {
         let mut summaries = Vec::new();
 
         for path in self.document_paths(true)? {
@@ -445,9 +445,9 @@ impl ProjectStore for FilesystemStore {
         Ok(summaries)
     }
 
-    fn document(&self, id: &str) -> Result<Document> {
+    fn get_document(&self, id: &str) -> Result<Document> {
         let summary = self
-            .catalog()?
+            .get_summaries()?
             .into_iter()
             .find(|summary| summary.metadata.id == id)
             .ok_or_else(|| MakespecError::NotFound(id.to_string()))?;
@@ -459,7 +459,7 @@ impl ProjectStore for FilesystemStore {
 
     fn create_proposal(&self, new_document: NewDocument) -> Result<Document> {
         self.with_lock(|state_path| {
-            let documents = self.catalog()?;
+            let documents = self.get_summaries()?;
             let mut counters = read_counters(state_path)?;
             let max_number = documents
                 .iter()
@@ -499,7 +499,7 @@ impl ProjectStore for FilesystemStore {
         })
     }
 
-    fn replace(&self, previous: &Document, replacement: &Document) -> Result<()> {
+    fn update_document(&self, previous: &Document, replacement: &Document) -> Result<()> {
         if previous.path != replacement.path
             || previous.metadata.id != replacement.metadata.id
             || previous.metadata.date != replacement.metadata.date
@@ -684,23 +684,59 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::{adapters::embedded, hexagon::service};
+    use crate::{
+        adapters::embedded::for_obtaining_skill_files::EmbeddedSkillFiles,
+        hexagon::{
+            Makespec,
+            document::{slugify, update_metadata},
+            ports::driver::for_managing_documents::ForManagingDocuments,
+        },
+    };
 
     const DECISION_BODY: &str = "## Context\n\nA focused decision is needed.\n\n## Decision\n\nUse the proposed approach.\n\n## Consequences\n\nThe choice is documented.";
     const SPECIFICATION_BODY: &str = "## Context\n\nBrowse local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Browse record titles. |\n\n## Options\n\n| Criterion ID | List view | Card view |\n| --- | --- | --- |\n| FR-001 | | |";
 
     fn initialized_store() -> (tempfile::TempDir, FilesystemStore) {
         let directory = tempfile::tempdir().unwrap();
+
+        initialize(directory.path()).unwrap();
+
         let store = FilesystemStore::new(directory.path()).unwrap();
-        service::initialize(&store, "2026-11-09", embedded::SKILL_FILES).unwrap();
 
         (directory, store)
+    }
+
+    fn makespec(path: &Path) -> Makespec<FilesystemStore, EmbeddedSkillFiles> {
+        Makespec::new(FilesystemStore::new(path).unwrap(), EmbeddedSkillFiles)
+    }
+
+    fn initialize(path: &Path) -> Result<()> {
+        makespec(path).initialize_project("2026-11-09")
+    }
+
+    fn check(path: &Path) -> Vec<String> {
+        makespec(path).check_documents().unwrap()
+    }
+
+    fn create(
+        store: &FilesystemStore,
+        kind: Kind,
+        title: String,
+        body: String,
+    ) -> Result<Document> {
+        store.create_proposal(NewDocument {
+            kind,
+            slug: slugify(&title)?,
+            title,
+            date: "2026-11-09".into(),
+            body,
+        })
     }
 
     #[test]
     fn initialization_creates_only_the_adoption_decision_and_is_idempotent() {
         let (directory, store) = initialized_store();
-        let original = store.document("ADR-0001").unwrap().raw;
+        let original = store.get_document("ADR-0001").unwrap().raw;
 
         assert_eq!(
             fs::read_dir(directory.path().join("docs/specifications"))
@@ -714,52 +750,22 @@ mod tests {
                 .is_empty()
         );
 
-        service::initialize(&store, "2026-11-09", embedded::SKILL_FILES).unwrap();
+        initialize(directory.path()).unwrap();
 
-        assert!(service::check(&store).unwrap().is_empty());
-        assert_eq!(service::list(&store).unwrap().len(), 1);
-        assert_eq!(store.document("ADR-0001").unwrap().raw, original);
-    }
-
-    #[test]
-    fn initialization_keeps_an_edited_seed_but_rejects_a_conflicting_one() {
-        let (directory, store) = initialized_store();
-        let seed_path = directory
-            .path()
-            .join(store.document("ADR-0001").unwrap().path);
-        let original = fs::read_to_string(&seed_path).unwrap();
-        let edited = original.replace("date: 2026-11-09", "date: 2026-11-10");
-
-        fs::write(&seed_path, &edited).unwrap();
-        service::initialize(&store, "2026-11-09", embedded::SKILL_FILES).unwrap();
-
-        assert_eq!(fs::read_to_string(&seed_path).unwrap(), edited);
-
-        fs::write(
-            &seed_path,
-            original.replace("status: accepted", "status: proposed"),
-        )
-        .unwrap();
-
-        let error = service::initialize(&store, "2026-11-09", embedded::SKILL_FILES).unwrap_err();
-
-        assert!(
-            error
-                .to_string()
-                .contains("does not match the accepted seed record")
-        );
+        assert!(check(directory.path()).is_empty());
+        assert_eq!(store.get_summaries().unwrap().len(), 1);
+        assert_eq!(store.get_document("ADR-0001").unwrap().raw, original);
     }
 
     #[test]
     fn initialization_preserves_existing_specifications_and_their_sequence() {
         let (directory, store) = initialized_store();
         let body = SPECIFICATION_BODY;
-        let specification = service::create(
+        let specification = create(
             &store,
             Kind::Specification,
             "Project functionality".into(),
             body.into(),
-            "2026-11-09",
         )
         .unwrap();
 
@@ -768,17 +774,19 @@ mod tests {
         let placeholder = directory.path().join("docs/specifications/.gitkeep");
 
         fs::remove_file(&placeholder).unwrap();
-        service::initialize(&store, "2026-11-09", embedded::SKILL_FILES).unwrap();
+        initialize(directory.path()).unwrap();
 
         assert!(!placeholder.exists());
-        assert_eq!(store.document("RFC-0001").unwrap().raw, specification.raw);
+        assert_eq!(
+            store.get_document("RFC-0001").unwrap().raw,
+            specification.raw
+        );
 
-        let next = service::create(
+        let next = create(
             &store,
             Kind::Specification,
             "More functionality".into(),
             body.into(),
-            "2026-11-09",
         )
         .unwrap();
 
@@ -803,12 +811,11 @@ mod tests {
                     let store = Arc::clone(&store);
 
                     std::thread::spawn(move || {
-                        service::create(
+                        create(
                             store.as_ref(),
                             kind,
                             format!("Concurrent {kind} {index}"),
                             body.to_string(),
-                            "2026-11-09",
                         )
                         .unwrap()
                         .metadata
@@ -832,12 +839,11 @@ mod tests {
         let (_directory, store) = initialized_store();
         let body = SPECIFICATION_BODY;
 
-        service::create(
+        create(
             &store,
             Kind::Specification,
             "Existing functionality".into(),
             body.into(),
-            "2026-11-09",
         )
         .unwrap();
 
@@ -849,14 +855,7 @@ mod tests {
             (Kind::Decision, DECISION_BODY, "ADR-0010"),
             (Kind::Specification, SPECIFICATION_BODY, "RFC-0013"),
         ] {
-            let created = service::create(
-                &store,
-                kind,
-                format!("New {kind}"),
-                body.into(),
-                "2026-11-09",
-            )
-            .unwrap();
+            let created = create(&store, kind, format!("New {kind}"), body.into()).unwrap();
 
             assert_eq!(created.metadata.id, expected);
         }
@@ -869,30 +868,17 @@ mod tests {
             (Kind::Decision, DECISION_BODY, "ADR-0001"),
         ] {
             let (directory, store) = initialized_store();
-            service::create(
-                &store,
-                kind,
-                "Removed record".into(),
-                body.into(),
-                "2026-11-09",
-            )
-            .unwrap();
+            create(&store, kind, "Removed record".into(), body.into()).unwrap();
 
-            for document in store.catalog().unwrap() {
+            for document in store.get_summaries().unwrap() {
                 if document.metadata.id.starts_with(kind.id_prefix()) {
                     fs::remove_file(directory.path().join(document.path)).unwrap();
                 }
             }
 
             let reopened = FilesystemStore::new(directory.path()).unwrap();
-            let replacement = service::create(
-                &reopened,
-                kind,
-                "First visible record".into(),
-                body.into(),
-                "2026-11-09",
-            )
-            .unwrap();
+            let replacement =
+                create(&reopened, kind, "First visible record".into(), body.into()).unwrap();
 
             assert_eq!(replacement.metadata.id, expected);
         }
@@ -902,23 +888,21 @@ mod tests {
     fn creation_conflicts_preserve_existing_files_and_reserved_ids() {
         let (directory, store) = initialized_store();
         let destination = directory.path().join("docs/decisions/0002-collision.md");
-        let existing = store.document("ADR-0001").unwrap().raw;
+        let existing = store.get_document("ADR-0001").unwrap().raw;
 
         fs::write(&destination, &existing).unwrap();
 
         assert!(
-            service::check(&store)
-                .unwrap()
+            check(directory.path())
                 .iter()
                 .any(|error| error.contains("duplicate"))
         );
         assert!(matches!(
-            service::create(
+            create(
                 &store,
                 Kind::Decision,
                 "Collision".into(),
                 DECISION_BODY.into(),
-                "2026-11-09"
             ),
             Err(MakespecError::AlreadyExists(_))
         ));
@@ -930,12 +914,11 @@ mod tests {
 
         fs::remove_file(destination).unwrap();
 
-        let created = service::create(
+        let created = create(
             &store,
             Kind::Decision,
             "After collision".into(),
             DECISION_BODY.into(),
-            "2026-11-09",
         )
         .unwrap();
 
@@ -943,33 +926,20 @@ mod tests {
     }
 
     #[test]
-    fn superseding_requires_an_accepted_same_kind_replacement() {
+    fn updates_replace_unchanged_documents_and_reject_external_edits() {
         let (_directory, store) = initialized_store();
-        let replacement = service::create(
-            &store,
-            Kind::Decision,
-            "A replacement decision".into(),
-            DECISION_BODY.into(),
-            "2026-11-09",
-        )
-        .unwrap();
+        let current = store.get_document("ADR-0001").unwrap();
+        let mut metadata = current.metadata.clone();
+        metadata.status = Status::Deprecated;
+        let replacement = update_metadata(&current, metadata).unwrap();
 
-        service::change_status(&store, &replacement.metadata.id, Status::Proposed, None).unwrap();
-        service::change_status(&store, &replacement.metadata.id, Status::Accepted, None).unwrap();
+        store.update_document(&current, &replacement).unwrap();
 
-        let superseded = service::change_status(
-            &store,
-            "ADR-0001",
-            Status::Superseded,
-            Some(&replacement.metadata.id),
-        )
-        .unwrap();
-
-        assert_eq!(
-            superseded.metadata.superseded_by.as_deref(),
-            Some(replacement.metadata.id.as_str())
-        );
-        assert!(service::check(&store).unwrap().is_empty());
+        assert_eq!(store.get_document("ADR-0001").unwrap().raw, replacement.raw);
+        assert!(matches!(
+            store.update_document(&current, &replacement),
+            Err(MakespecError::ConcurrentModification(_))
+        ));
     }
 
     #[test]
@@ -985,8 +955,8 @@ mod tests {
 
         fs::write(path, content).unwrap();
 
-        assert_eq!(service::list(&store).unwrap().len(), 2);
-        assert!(store.document("ADR-0002").is_err());
+        assert_eq!(store.get_summaries().unwrap().len(), 2);
+        assert!(store.get_document("ADR-0002").is_err());
     }
 
     #[test]
@@ -996,20 +966,20 @@ mod tests {
 
         fs::create_dir_all(directory.path().join("docs/decisions")).unwrap();
 
-        assert!(store.existing_documents().unwrap().is_empty());
+        assert!(store.get_existing_documents().unwrap().is_empty());
         assert!(matches!(
-            store.documents(),
+            store.get_documents(),
             Err(MakespecError::NotInitialized)
         ));
         assert!(matches!(
-            store.catalog(),
+            store.get_summaries(),
             Err(MakespecError::NotInitialized)
         ));
 
         fs::create_dir(directory.path().join("docs/specifications")).unwrap();
 
-        assert!(store.documents().unwrap().is_empty());
-        assert!(store.catalog().unwrap().is_empty());
+        assert!(store.get_documents().unwrap().is_empty());
+        assert!(store.get_summaries().unwrap().is_empty());
     }
 
     #[test]
@@ -1020,8 +990,8 @@ mod tests {
         fs::remove_file(&placeholder).unwrap();
         fs::create_dir(&placeholder).unwrap();
 
-        assert!(store.documents().is_err());
-        assert!(store.catalog().is_err());
+        assert!(store.get_documents().is_err());
+        assert!(store.get_summaries().is_err());
     }
 
     #[test]
@@ -1030,19 +1000,19 @@ mod tests {
         let unexpected = directory.path().join("docs/decisions/unexpected.txt");
         let _staged = stage_file(&unexpected, "unfinished content").unwrap();
 
-        assert_eq!(store.documents().unwrap().len(), 1);
-        assert_eq!(store.catalog().unwrap().len(), 1);
+        assert_eq!(store.get_documents().unwrap().len(), 1);
+        assert_eq!(store.get_summaries().unwrap().len(), 1);
 
         fs::write(&unexpected, "not a document").unwrap();
 
-        assert!(store.documents().is_err());
-        assert!(store.catalog().is_err());
+        assert!(store.get_documents().is_err());
+        assert!(store.get_summaries().is_err());
 
         fs::remove_file(&unexpected).unwrap();
         fs::create_dir(unexpected.with_extension("md")).unwrap();
 
-        assert!(store.documents().is_err());
-        assert!(store.catalog().is_err());
+        assert!(store.get_documents().is_err());
+        assert!(store.get_summaries().is_err());
     }
 
     #[cfg(unix)]
@@ -1063,7 +1033,7 @@ mod tests {
                 content: "document".into(),
             }];
 
-            assert!(store.initialize(&files).is_err());
+            assert!(store.create_files(&files).is_err());
             assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
         }
     }

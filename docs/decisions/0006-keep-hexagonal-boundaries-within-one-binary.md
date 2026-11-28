@@ -15,13 +15,12 @@ Document rules and lifecycle policies need tests that do not depend on terminal 
 
 Keep lightweight hexagonal boundaries within the single Cargo binary:
 
-- src/hexagon/document.rs owns document construction, parsing, and validation.
-- src/hexagon/service.rs owns use cases.
-- src/hexagon/ports.rs owns the ProjectStore port.
+- src/core/document.rs owns document construction, parsing, and validation.
+- src/core/service.rs owns use cases and the ProjectStore port.
 - src/adapters/ implements filesystem access and supplies embedded skill assets.
 - src/startup/cli.rs composes the adapter and handles terminal input/output.
 
-Read the clock in src/startup/cli.rs and pass the operation date into use cases. Keep direct filesystem and terminal access in adapters. Add no public library, provider interface, generic repository framework, or speculative abstraction.
+Pass the operation date into use cases. Keep direct filesystem and terminal access in adapters. Add no public library, provider interface, generic repository framework, or speculative abstraction.
 
 ## Consequences
 
@@ -33,4 +32,5 @@ The storage port adds an internal boundary that contributors must preserve. Keep
 
 - [Contributor instructions](../../AGENTS.md) define repository coding and check requirements.
 - [Contribution conventions](../../CONTRIBUTING.md) require the existing hexagonal boundaries.
-- [Storage port](../../src/hexagon/ports.rs) defines the dependency boundary used by the [workflows](../../src/hexagon/service.rs).
+- [Storage port](../../src/hexagon/ports/driven/for_storing_documents.rs) defines the dependency boundary.
+- [ADR-0009: Structure the hexagon with explicit ports and test doubles](0009-structure-the-hexagon-with-explicit-ports-and-test-doubles.md) proposes the layout that replaces this one.

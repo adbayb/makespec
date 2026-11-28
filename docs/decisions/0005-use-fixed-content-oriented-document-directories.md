@@ -26,5 +26,5 @@ Repositories cannot customize managed locations. A future layout change requires
 ## References
 
 - [Directory mapping](../../src/hexagon/document.rs) defines each kind's managed directory.
-- [CLI adapter](../../src/startup/cli.rs) uses the current directory as the project root.
-- [Embedded skill assets](../../src/adapters/embedded.rs) define the installed skill files.
+- [CLI startup](../../src/startup/cli.rs) uses the current directory as the project root.
+- [Embedded skill assets](../../src/adapters/embedded/for_obtaining_skill_files.rs) define the installed skill files.

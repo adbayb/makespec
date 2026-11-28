@@ -27,5 +27,5 @@ Initialization is not a multi-file transaction. Advisory locks coordinate Makesp
 
 ## References
 
-- [Filesystem adapter](../../src/adapters/filesystem.rs) implements staging, exclusive creation, replacement checks, and rollback.
-- [Hexagon workflows](../../src/hexagon/service.rs) validate initialization and acceptance before publication.
+- [Filesystem adapter](../../src/adapters/filesystem/for_storing_documents.rs) implements staging, exclusive creation, replacement checks, and rollback.
+- [Initialization](../../src/hexagon/initialize_project.rs) and [status changes](../../src/hexagon/change_document_status.rs) validate records before publication.

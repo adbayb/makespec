@@ -442,6 +442,21 @@ pub(crate) fn validate_document_structure(document: &Document) -> Vec<String> {
     validate(document, false)
 }
 
+/// Fails with every validation error of `document`, prefixed by `context`.
+pub(crate) fn ensure_valid(document: &Document, context: &str) -> Result<()> {
+    let errors = validate_document(document);
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(validation_error(context, &errors))
+    }
+}
+
+pub(crate) fn validation_error(context: &str, errors: &[String]) -> MakespecError {
+    MakespecError::Invalid(format!("{context}: {}", errors.join("; ")))
+}
+
 fn validate(document: &Document, complete: bool) -> Vec<String> {
     let Ok((kind, _)) = document.metadata.validate() else {
         return vec!["invalid document metadata".into()];

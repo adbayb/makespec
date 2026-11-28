@@ -27,6 +27,6 @@ Users need an editor or agent to author prose. Agent discovery depends on suppor
 
 ## References
 
-- [CLI adapter](../../src/startup/cli.rs) defines commands and terminal-input behavior.
+- [CLI adapter](../../src/adapters/cli/for_managing_documents.rs) defines commands and terminal-input behavior.
 - [Makespec skill](../../.agents/skills/makespec/SKILL.md) defines agent workflows and approval boundaries.
 - [Command reference](../../.agents/skills/makespec/references/cli.md) defines syntax and lifecycle transitions.
