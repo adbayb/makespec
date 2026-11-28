@@ -1,15 +1,18 @@
-use std::io::{self, IsTerminal, Read};
+use std::{
+    io::{self, IsTerminal, Read},
+    process::ExitCode,
+};
 
+use chrono::Local;
 use clap::{CommandFactory, Parser, Subcommand};
 
 use crate::{
     adapters::{embedded, filesystem::FilesystemStore},
-    core::{
-        document::{DocumentSummary, Kind, MAX_DOCUMENT_BYTES, Status, today},
+    hexagon::{
+        document::{DocumentSummary, Kind, MAX_DOCUMENT_BYTES, Status},
         error::{MakespecError, Result},
         service,
     },
-    sanitize_terminal_text,
 };
 
 #[derive(Parser)]
@@ -44,8 +47,18 @@ enum CommandLine {
     Check,
 }
 
-pub fn run() -> Result<()> {
-    let cli = Cli::parse();
+pub fn run() -> ExitCode {
+    match execute(Cli::parse()) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("makespec: {}", sanitize_terminal_text(&error.to_string()));
+
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn execute(cli: Cli) -> Result<()> {
     let Some(command) = cli.command else {
         Cli::command().print_help()?;
         println!();
@@ -122,10 +135,13 @@ fn print_document_list(documents: &[DocumentSummary]) {
 
     let mut has_printed_group = false;
 
-    for (heading, prefix) in [("Decisions", "ADR-"), ("Specifications", "RFC-")] {
+    for (heading, kind) in [
+        ("Decisions", Kind::Decision),
+        ("Specifications", Kind::Specification),
+    ] {
         let group: Vec<_> = documents
             .iter()
-            .filter(|document| document.metadata.id.starts_with(prefix))
+            .filter(|document| document.metadata.id.starts_with(kind.id_prefix()))
             .collect();
 
         if group.is_empty() {
@@ -173,4 +189,20 @@ fn read_stdin_bounded() -> Result<String> {
 
     String::from_utf8(bytes)
         .map_err(|_| MakespecError::Invalid("stdin body must be valid UTF-8".into()))
+}
+
+fn today() -> String {
+    Local::now().date_naive().to_string()
+}
+
+fn sanitize_terminal_text(text: &str) -> String {
+    text.chars()
+        .map(|character| {
+            if character.is_control() && character != '\n' {
+                '\u{fffd}'
+            } else {
+                character
+            }
+        })
+        .collect()
 }

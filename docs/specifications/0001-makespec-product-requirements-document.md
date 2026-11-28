@@ -115,8 +115,9 @@ Use normal workspace tools for body edits. Before replacing a record, compare it
 
 Keep one Cargo binary and the existing hexagonal boundaries:
 
-- `src/core/document.rs` owns document construction, parsing, and validation.
-- `src/core/service.rs` owns use cases and the `ProjectStore` port.
+- `src/hexagon/document.rs` owns document construction, parsing, and validation.
+- `src/hexagon/service.rs` owns use cases.
+- `src/hexagon/ports.rs` owns the `ProjectStore` port.
 - `src/adapters/` implements filesystem access and supplies embedded skill assets.
 - `src/startup/cli.rs` composes adapters and handles terminal input/output.
 
@@ -163,5 +164,5 @@ Removing the tool requires no data export. Records remain ordinary Markdown avai
 - [Decision template](../../.agents/skills/makespec/references/decision-template.md) and [specification template](../../.agents/skills/makespec/references/specification-template.md) define body structure and comparison grammar.
 - [Makespec skill](../../.agents/skills/makespec/SKILL.md) defines authoring, planning, and approval boundaries.
 - [Contribution guide](../../CONTRIBUTING.md) defines development checks, benchmarks, and releases.
-- [Document rules](../../src/core/document.rs), [core workflows](../../src/core/service.rs), and [filesystem adapter](../../src/adapters/filesystem.rs) implement the product contracts.
+- [Document rules](../../src/hexagon/document.rs), [hexagon workflows](../../src/hexagon/service.rs), and [filesystem adapter](../../src/adapters/filesystem.rs) implement the product contracts.
 - [CLI tests](../../tests/cli.rs) and [CI workflow](../../.github/workflows/ci.yml) provide executable checks.

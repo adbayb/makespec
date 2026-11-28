@@ -3,7 +3,7 @@ use std::{
     ops::Range,
 };
 
-use chrono::{Local, NaiveDate};
+use chrono::NaiveDate;
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::Value;
@@ -37,6 +37,14 @@ impl Kind {
         match self {
             Self::Decision => "decisions",
             Self::Specification => "specifications",
+        }
+    }
+
+    fn from_id_prefix(prefix: &str) -> Option<Self> {
+        match prefix {
+            "ADR" => Some(Self::Decision),
+            "RFC" => Some(Self::Specification),
+            _ => None,
         }
     }
 }
@@ -185,12 +193,7 @@ impl NewDocument {
 
 impl Metadata {
     pub fn validate(&self) -> Result<(Kind, u32)> {
-        let (prefix, number) = parse_id(&self.id)?;
-        let kind = match prefix {
-            "ADR" => Kind::Decision,
-            "RFC" => Kind::Specification,
-            _ => unreachable!("parse_id validates document prefixes"),
-        };
+        let (kind, number) = parse_id(&self.id)?;
 
         NaiveDate::parse_from_str(&self.date, "%Y-%m-%d").map_err(|_| {
             MakespecError::Invalid(format!(
@@ -207,7 +210,7 @@ impl Metadata {
             (Status::Superseded, Some(target)) => {
                 let (target_kind, _) = parse_id(target)?;
 
-                if target == self.id || target_kind != kind.id_prefix() {
+                if target == self.id || target_kind != kind {
                     return Err(MakespecError::Invalid(format!(
                         "supersession target `{target}` must be a different {kind} document"
                     )));
@@ -228,10 +231,6 @@ impl Metadata {
 
         Ok((kind, number))
     }
-}
-
-pub fn today() -> String {
-    Local::now().date_naive().to_string()
 }
 
 pub fn slugify(title: &str) -> Result<String> {
@@ -279,20 +278,17 @@ pub fn slugify(title: &str) -> Result<String> {
     Ok(slug)
 }
 
-pub fn parse_id(id: &str) -> Result<(&str, u32)> {
-    let (prefix, number_text) = id.split_once('-').ok_or_else(|| {
+pub fn parse_id(id: &str) -> Result<(Kind, u32)> {
+    let invalid = || {
         MakespecError::Invalid(format!(
             "invalid document ID `{id}`; expected ADR-0001 or RFC-0001"
         ))
-    })?;
+    };
+    let (prefix, number_text) = id.split_once('-').ok_or_else(invalid)?;
+    let kind = Kind::from_id_prefix(prefix).ok_or_else(invalid)?;
 
-    if !matches!(prefix, "ADR" | "RFC")
-        || number_text.len() < 4
-        || !number_text.bytes().all(|byte| byte.is_ascii_digit())
-    {
-        return Err(MakespecError::Invalid(format!(
-            "invalid document ID `{id}`; expected ADR-0001 or RFC-0001"
-        )));
+    if number_text.len() < 4 || !number_text.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(invalid());
     }
 
     let number = number_text
@@ -305,10 +301,10 @@ pub fn parse_id(id: &str) -> Result<(&str, u32)> {
         )));
     }
 
-    Ok((prefix, number))
+    Ok((kind, number))
 }
 
-pub fn render_document(metadata: &Metadata, body: &str) -> Result<String> {
+fn render_document(metadata: &Metadata, body: &str) -> Result<String> {
     let yaml = serde_yaml_ng::to_string(metadata)?;
 
     Ok(format!(
@@ -592,7 +588,7 @@ fn collect_headings(markdown: &str) -> Vec<Heading> {
 type Table = Vec<Vec<String>>;
 
 enum Criterion {
-    Requirement(String),
+    Requirement { must: bool },
     Constraint,
 }
 
@@ -674,11 +670,8 @@ fn validate_requirements(
         }
 
         let id = row[0].trim().to_ascii_uppercase();
-        let id_number = id.strip_prefix("NFR-").or_else(|| id.strip_prefix("FR-"));
 
-        if !id_number.is_some_and(|number| {
-            number.len() >= 3 && number.bytes().all(|byte| byte.is_ascii_digit())
-        }) {
+        if !is_criterion_id(&id, &["FR-", "NFR-"]) {
             errors.push(format!("invalid requirement ID `{}`", row[0]));
             continue;
         }
@@ -697,7 +690,12 @@ fn validate_requirements(
         }
 
         if criteria
-            .insert(id.clone(), Criterion::Requirement(priority))
+            .insert(
+                id.clone(),
+                Criterion::Requirement {
+                    must: priority == "MUST",
+                },
+            )
             .is_some()
         {
             errors.push(format!("duplicate criterion ID `{id}`"));
@@ -719,11 +717,8 @@ fn validate_constraints(
         }
 
         let id = row[0].trim().to_ascii_uppercase();
-        let id_number = id.strip_prefix("C-");
 
-        if !id_number.is_some_and(|number| {
-            number.len() >= 3 && number.bytes().all(|byte| byte.is_ascii_digit())
-        }) {
+        if !is_criterion_id(&id, &["C-"]) {
             errors.push(format!("invalid constraint ID `{}`", row[0]));
             continue;
         }
@@ -736,6 +731,13 @@ fn validate_constraints(
             errors.push(format!("duplicate criterion ID `{id}`"));
         }
     }
+}
+
+fn is_criterion_id(id: &str, prefixes: &[&str]) -> bool {
+    prefixes
+        .iter()
+        .find_map(|prefix| id.strip_prefix(prefix))
+        .is_some_and(|number| number.len() >= 3 && number.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
 fn validate_options(
@@ -878,7 +880,7 @@ fn validate_comparison(
         }
 
         let criterion = row[0].trim().to_ascii_uppercase();
-        let Some(priority) = criteria.get(&criterion) else {
+        let Some(criterion_kind) = criteria.get(&criterion) else {
             errors.push(format!(
                 "comparison references unknown criterion `{criterion}`"
             ));
@@ -909,8 +911,8 @@ fn validate_comparison(
 
             let label = label.trim().to_ascii_lowercase();
 
-            match priority {
-                Criterion::Requirement(priority) => {
+            match criterion_kind {
+                Criterion::Requirement { must } => {
                     if !matches!(
                         label.as_str(),
                         "does not meet" | "partially meets" | "fully meets"
@@ -921,7 +923,7 @@ fn validate_comparison(
                     }
 
                     if complete
-                        && priority == "MUST"
+                        && *must
                         && label != "fully meets"
                         && option.eq_ignore_ascii_case(chosen)
                     {
@@ -1194,7 +1196,7 @@ mod tests {
 
     #[test]
     fn comparison_option_count_has_a_minimum_but_no_fixed_target() {
-        let criteria = BTreeMap::from([("FR-001".into(), Criterion::Requirement("MUST".into()))]);
+        let criteria = BTreeMap::from([("FR-001".into(), Criterion::Requirement { must: true })]);
 
         for count in 1..=5 {
             let mut headers = vec!["Criterion ID".into()];
@@ -1221,8 +1223,12 @@ mod tests {
 
     #[test]
     fn document_ids_use_canonical_positive_sequences() {
-        assert_eq!(parse_id("ADR-0001").unwrap(), ("ADR", 1));
-        assert_eq!(parse_id("RFC-10000").unwrap(), ("RFC", 10_000));
+        assert_eq!(parse_id("ADR-0001").unwrap(), (Kind::Decision, 1));
+        assert_eq!(
+            parse_id("RFC-10000").unwrap(),
+            (Kind::Specification, 10_000)
+        );
+        assert!(parse_id("XYZ-0001").is_err());
         assert!(parse_id("ADR-0000").is_err());
         assert!(parse_id("ADR-00001").is_err());
     }
@@ -1352,5 +1358,371 @@ mod tests {
         let updated = update_metadata(&document, accepted_metadata).unwrap();
 
         assert!(updated.raw.ends_with("## Consequences\r\n\r\nTrade-off."));
+    }
+
+    fn complete_specification_body() -> &'static str {
+        r#"## Context
+
+Define a consistent specification format for functionality. Specifications use the request for comments (RFC) format and include product requirements documents (PRDs) as well as technical change proposals. Authors need a reviewable record of the problem, evaluation criteria, options, chosen design, and adoption approach without a hosted service.
+
+## Requirements and constraints
+
+### Requirements
+
+| ID | Priority | Requirement |
+| --- | --- | --- |
+| FR-001 | MUST | A specification describes functionality requirements, constraints, and qualitative alternatives. |
+| NFR-001 | SHOULD | A specification remains readable and reviewable as plain Markdown in Git. |
+
+### Constraints
+
+| ID | Constraint |
+| --- | --- |
+| C-001 | The format must work with repository files and require no service or database. |
+
+## Options
+
+- No change: leave proposal formats to individual authors.
+- Free-form Markdown: record proposals without required sections or comparison rules.
+- Decision-only records: reuse the focused decision format for functionality specifications.
+- Makespec format: use shared criteria, an options comparison, and a design for the chosen option.
+
+| Criterion ID | No change | Free-form Markdown | Decision-only records | Makespec format |
+| --- | --- | --- | --- | --- |
+| FR-001 | Does not meet - Proposals need not capture the required areas. | Does not meet - No structure requires all required areas. | Does not meet - Decisions do not specify functionality. | Fully meets - The format requires functionality criteria, constraints, and comparisons. |
+| NFR-001 | Partially meets - Markdown stays readable, but authors lack a shared structure. | Fully meets - Free-form Markdown remains easy to read and diff. | Fully meets - Decisions remain plain Markdown in Git. | Fully meets - The format uses reviewable Markdown tables. |
+| C-001 | PASS - It requires no service or database. | PASS - It uses repository files only. | PASS - It uses repository files only. | PASS - The CLI reads and writes local Markdown files. |
+
+**Chosen option:** Makespec format
+
+The chosen format fully meets FR-001 and satisfies the hard constraint. It keeps records portable while making comparison criteria explicit.
+
+## Design
+
+Every specification has YAML front matter containing `id`, `title`, `date`, and `status`. The CLI supplies this metadata and the title heading. The ID prefix determines the document kind: `ADR-` for decisions and `RFC-` for specifications. The filename retains its creation-time slug if the title later changes.
+
+Specification bodies use Context, Requirements and constraints, Options, Design, and Adoption in that order. Context starts with a short proposal summary and explains the problem and scope. Put functional requirements in a `### Requirements` table, adding non-functional requirements only when relevant. Add a separate `### Constraints` table only for genuine hard boundaries. An optional Open questions section may follow Adoption.
+
+An optional References section comes last. Link related decisions and specifications by ID using relative Markdown paths, explain each relationship, and include external sources when relevant. A specification may link to broader or focused specifications instead of duplicating requirements.
+
+Functional requirements use unique `FR-001`-style IDs, and non-functional requirements use `NFR-001`-style IDs. Both use priority (MUST, SHOULD, or MAY). Constraints use unique `C-001` IDs. Options includes candidate descriptions and one comparison table with criteria in rows and options in columns. Include at least two options. Include No change only when it represents a meaningful current-state alternative; omit it when it would add no useful comparison, such as for a greenfield project with no existing capability. When omitting No change, compare at least two distinct approaches that address the same need. Requirement cells use `Does not meet`, `Partially meets`, or `Fully meets`, followed by ` - ` and evidence. Constraint cells use `PASS` or `FAIL`, followed by ` - ` and evidence. The chosen option must fully meet each MUST requirement and pass every constraint. Explain the choice using criterion IDs rather than an aggregate score.
+
+New records start as proposed. Creation checks the initial structure, including at least one functional requirement and a comparison table. Checking a proposal requires all five sections, an assessment of every criterion for every option, an eligible chosen option, and no template placeholders. Incomplete proposals fail checking and cannot be accepted. Proposed records may become accepted or rejected. Accepted records may become deprecated or superseded.
+
+Design describes only the chosen option, including behavior, examples, and failure cases. Add a Risks and mitigations subsection when material risks need explanation. Adoption covers rollout, compatibility, and verification, with migration or rollback when relevant.
+
+### Risks and mitigations
+
+Comparison labels require supporting evidence; the CLI checks structure and eligibility but cannot judge whether an assessment is true. Reviewers must examine the evidence before accepting a proposal.
+
+## Adoption
+
+Create proposals from the bundled template and run `makespec check` after edits. Resolve missing information and validation errors, then request acceptance after review. Verify adoption by exercising creation, checking an incomplete proposal, completing it, and accepting it."#
+    }
+
+    const INCOMPLETE_SPECIFICATION_BODY: &str = "## Context\n\nLet users search local records.\n\n## Requirements and constraints\n\n### Requirements\n\n| ID | Priority | Requirement |\n| --- | --- | --- |\n| FR-001 | MUST | Search records by title. |\n\n## Options\n\n| Criterion ID | No change | Local search |\n| --- | --- | --- |\n| FR-001 | | |\n\n**Chosen option:**";
+
+    #[test]
+    fn incomplete_proposals_pass_creation_structure_but_fail_readiness_checks() {
+        let proposal = specification(INCOMPLETE_SPECIFICATION_BODY, Status::Proposed);
+
+        assert!(validate_document_structure(&proposal).is_empty());
+        assert!(
+            validate_document(&specification(
+                INCOMPLETE_SPECIFICATION_BODY,
+                Status::Rejected
+            ))
+            .is_empty()
+        );
+
+        let errors = validate_document(&proposal);
+
+        for expected in [
+            "`## Design`",
+            "`## Adoption`",
+            "chosen option",
+            "label and explanation",
+        ] {
+            assert!(
+                errors.iter().any(|error| error.contains(expected)),
+                "{errors:?}"
+            );
+        }
+
+        let body = INCOMPLETE_SPECIFICATION_BODY
+            .replace(
+                "| FR-001 | | |",
+                "| FR-001 | Does not meet - No search exists. | Fully meets - Search matches titles. |",
+            )
+            .replace("**Chosen option:**", "**Chosen option:** Local search")
+            + "\n\n## Design\n\nMatch a query against record titles.\n\n## Adoption\n\nShip the search command and verify title matches.";
+        let errors = validate_document(&specification(&body, Status::Proposed));
+
+        assert!(errors.is_empty(), "{errors:?}");
+    }
+
+    #[test]
+    fn creation_rejects_inconsistent_comparison_structure() {
+        for (original, replacement, expected) in [
+            (
+                "| Criterion ID | No change | Local search |\n| --- | --- | --- |\n| FR-001 | | |",
+                "| Criterion ID | Local search |\n| --- | --- |\n| FR-001 | |",
+                "at least two option columns",
+            ),
+            (
+                "| FR-001 | MUST | Search records by title. |",
+                "",
+                "at least one functional requirement",
+            ),
+            ("| FR-001 | | |", "| FR-002 | | |", "unknown criterion"),
+            (
+                "| FR-001 | | |",
+                "| FR-001 | | |\n| FR-001 | | |",
+                "repeats criterion",
+            ),
+            (
+                "| FR-001 | | |",
+                "| FR-001 | PASS - Confused labels. | |",
+                "invalid requirement label",
+            ),
+            (
+                "**Chosen option:**",
+                "**Chosen option:** Missing",
+                "chosen option",
+            ),
+            (
+                "### Requirements",
+                "### Requirements\n\n### Requirements",
+                "duplicate `### Requirements`",
+            ),
+            (
+                "## Options",
+                "## Open questions\n\nPending.\n\n## Options",
+                "template order",
+            ),
+        ] {
+            let body = INCOMPLETE_SPECIFICATION_BODY.replace(original, replacement);
+            let errors = validate_document_structure(&specification(&body, Status::Proposed));
+
+            assert!(
+                errors.iter().any(|error| error.contains(expected)),
+                "{errors:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn complete_specifications_can_compare_two_approaches_without_no_change() {
+        let body = complete_specification_body()
+            .replace("| --- | --- | --- | --- | --- |", "| --- | --- | --- |")
+            .replace(
+                "| Criterion ID | No change | Free-form Markdown | Decision-only records | Makespec format |",
+                "| Criterion ID | Free-form Markdown | Makespec format |",
+            )
+            .replace(
+                "| FR-001 | Does not meet - Proposals need not capture the required areas. | Does not meet - No structure requires all required areas. | Does not meet - Decisions do not specify functionality. | Fully meets - The format requires functionality criteria, constraints, and comparisons. |",
+                "| FR-001 | Does not meet - No structure requires all required areas. | Fully meets - The format requires functionality criteria, constraints, and comparisons. |",
+            )
+            .replace(
+                "| NFR-001 | Partially meets - Markdown stays readable, but authors lack a shared structure. | Fully meets - Free-form Markdown remains easy to read and diff. | Fully meets - Decisions remain plain Markdown in Git. | Fully meets - The format uses reviewable Markdown tables. |",
+                "| NFR-001 | Fully meets - Free-form Markdown remains easy to read and diff. | Fully meets - The format uses reviewable Markdown tables. |",
+            )
+            .replace(
+                "| C-001 | PASS - It requires no service or database. | PASS - It uses repository files only. | PASS - It uses repository files only. | PASS - The CLI reads and writes local Markdown files. |",
+                "| C-001 | PASS - It uses repository files only. | PASS - The CLI reads and writes local Markdown files. |",
+            );
+        let errors = validate_document(&specification(&body, Status::Proposed));
+
+        assert!(errors.is_empty(), "{errors:?}");
+    }
+
+    #[test]
+    fn templates_require_completion_and_specification_candidates() {
+        for (kind, body) in [
+            (
+                Kind::Decision,
+                include_str!("../../.agents/skills/makespec/references/decision-template.md"),
+            ),
+            (
+                Kind::Specification,
+                include_str!("../../.agents/skills/makespec/references/specification-template.md"),
+            ),
+        ] {
+            let mut new_document = NewDocument {
+                kind,
+                title: "Template record".into(),
+                slug: "template-record".into(),
+                date: "2026-11-09".into(),
+                body: body.into(),
+            };
+            if kind == Kind::Specification {
+                let errors =
+                    validate_document_structure(&new_document.build(1, Status::Proposed).unwrap());
+
+                assert_eq!(errors, ["`## Options` is missing its comparison table"]);
+
+                new_document.body = new_document.body.replace(
+                    "## Options",
+                    "## Options\n\n| Criterion ID | List view | Card view |\n| --- | --- | --- |\n| FR-001 | | |\n| NFR-001 | | |\n| C-001 | | |",
+                ).replace("Selected candidate", "List view");
+            }
+
+            let errors =
+                validate_document_structure(&new_document.build(1, Status::Proposed).unwrap());
+
+            assert!(errors.is_empty(), "{errors:?}");
+            assert!(
+                validate_document(&new_document.build(1, Status::Proposed).unwrap())
+                    .iter()
+                    .any(|error| error.contains("unresolved template placeholder"))
+            );
+        }
+    }
+
+    #[test]
+    fn references_are_optional_unique_nonempty_and_in_template_order() {
+        let references = "## References\n\n- [ADR-0001: Use Makespec to manage decisions and specifications](../decisions/0001-use-makespec-to-manage-decisions-and-specifications.md) adopts the workflow.";
+
+        for (kind, body) in [
+            (
+                Kind::Decision,
+                "## Context\n\nContributors need a focused choice.\n\n## Decision\n\nUse the proposed approach.\n\n## Consequences\n\nKeep the decision in Git.".to_string(),
+            ),
+            (
+                Kind::Specification,
+                format!(
+                    "{}\n\n## Open questions\n\nWhich follow-up metrics would help?",
+                    complete_specification_body()
+                ),
+            ),
+        ] {
+            for (body, expected_error) in [
+                (body.clone(), None),
+                (format!("{body}\n\n{references}"), None),
+                (
+                    format!("{body}\n\n## References\n"),
+                    Some("`## References` must contain content"),
+                ),
+                (
+                    format!("{body}\n\n{references}\n\n{references}"),
+                    Some("duplicate `## References`"),
+                ),
+                (format!("{references}\n\n{body}"), Some("template order")),
+            ] {
+                let document = record(kind, "Reference validation", &body, Status::Accepted);
+                let errors = validate_document(&document);
+
+                if let Some(expected) = expected_error {
+                    assert!(
+                        errors.iter().any(|error| error.contains(expected)),
+                        "{kind}: {errors:?}"
+                    );
+                } else {
+                    assert!(errors.is_empty(), "{kind}: {errors:?}");
+                }
+            }
+        }
+
+        let body = format!(
+            "{}\n\n{references}\n\n## Open questions\n\nWhich follow-up metrics would help?",
+            complete_specification_body()
+        );
+        let errors = validate_document(&specification(&body, Status::Proposed));
+
+        assert!(
+            errors.iter().any(|error| error.contains("template order")),
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn specification_comparisons_validate_descriptions_labels_and_chosen_option_eligibility() {
+        assert!(
+            validate_document(&specification(
+                complete_specification_body(),
+                Status::Proposed
+            ))
+            .is_empty()
+        );
+
+        for (original, replacement, expected, valid_structure) in [
+            (
+                "Fully meets - The format requires functionality criteria, constraints, and comparisons.",
+                "Does not meet - The format requires functionality criteria, constraints, and comparisons.",
+                "chosen option does not fully meet a MUST requirement",
+                true,
+            ),
+            (
+                "PASS - The CLI reads and writes local Markdown files.",
+                "FAIL - The CLI reads and writes local Markdown files.",
+                "chosen option fails a constraint",
+                true,
+            ),
+            (
+                "Fully meets - The format requires functionality criteria, constraints, and comparisons.",
+                "3 - The format requires functionality criteria, constraints, and comparisons.",
+                "invalid requirement label `3` for `FR-001`",
+                false,
+            ),
+            (
+                "| FR-001 | MUST | A specification describes functionality requirements, constraints, and qualitative alternatives. |",
+                "| FR-001 | MUST | |",
+                "needs a description",
+                false,
+            ),
+        ] {
+            let body = complete_specification_body().replace(original, replacement);
+            let errors = validate_document(&specification(&body, Status::Proposed));
+
+            assert!(
+                errors.iter().any(|error| error.contains(expected)),
+                "{errors:?}"
+            );
+            assert_eq!(
+                validate_document_structure(&specification(&body, Status::Proposed)).is_empty(),
+                valid_structure
+            );
+        }
+    }
+
+    #[test]
+    fn specification_reports_requirement_and_constraint_errors_together() {
+        let body = complete_specification_body()
+            .replace(
+                "| FR-001 | MUST | A specification describes functionality requirements, constraints, and qualitative alternatives. |",
+                "| FR-001 | MUST | |",
+            )
+            .replace(
+                "PASS - The CLI reads and writes local Markdown files.",
+                "FAIL - The CLI reads and writes local Markdown files.",
+            );
+        let errors = validate_document(&specification(&body, Status::Proposed));
+
+        assert!(
+            errors
+                .iter()
+                .any(|error| error == "criterion `FR-001` needs a description")
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|error| error == "chosen option fails a constraint")
+        );
+    }
+
+    fn specification(body: &str, status: Status) -> Document {
+        record(Kind::Specification, "Local search", body, status)
+    }
+
+    fn record(kind: Kind, title: &str, body: &str, status: Status) -> Document {
+        NewDocument {
+            kind,
+            title: title.into(),
+            slug: slugify(title).unwrap(),
+            date: "2026-11-09".into(),
+            body: body.into(),
+        }
+        .build(1, status)
+        .unwrap()
     }
 }
